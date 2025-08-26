@@ -624,6 +624,29 @@ function solve_static_cases(cases, tol, coords, hardware; case_style = "default"
         error("Wrong coords")
     end
 
+    schema = Dict(
+        :id          => Int,
+        :iter        => Any,
+        :soltime     => Float64,
+        :inittime    => Any,
+        :adtime      => Any,
+        :lintime     => Any,
+        :termination => String,
+        :obj         => Any,
+        :cvio        => Any
+    )
+
+    function enforce_schema!(df, schema::Dict{Symbol,DataType})
+        for (col, T) in schema
+            if string(col) in names(df)
+                df[!, col] = Vector{T}(df[!, col])
+            else
+                df[!, col] = Vector{T}()  # add missing col
+            end
+        end
+        return df
+    end
+
     existing_results = Dict{Symbol,DataFrame}()
     if isfile(csv_filename)
         file_exists = true
@@ -660,19 +683,23 @@ function solve_static_cases(cases, tol, coords, hardware; case_style = "default"
         
         if !file_exists
             df_lifted_kkt = DataFrame(
-                id = Int[], iter = Float64[], soltime = Float64[], inittime = Float64[],
-                adtime = Float64[], lintime = Float64[], termination = String[],
-                obj = Float64[], cvio = Float64[]
+                id = Int[], iter = Any[], soltime = Float64[], inittime = Any[],
+                adtime = Any[], lintime = Any[], termination = String[],
+                obj = Any[], cvio = Any[]
             )
             df_hybrid_kkt = similar(df_lifted_kkt)
             df_madncl = similar(df_lifted_kkt)
         else
             df_lifted_kkt = select(existing_results, r"lifted_kkt$")
             rename!(df_lifted_kkt, Symbol.(replace.(String.(names(df_lifted_kkt)), "_lifted_kkt" => "")))
+            df_lifted_kkt = enforce_schema!(df_lifted_kkt, schema)
             df_hybrid_kkt = select(existing_results, r"hybrid_kkt$")
             rename!(df_hybrid_kkt, Symbol.(replace.(String.(names(df_hybrid_kkt)), "_hybrid_kkt" => "")))
+            df_hybrid_kkt = enforce_schema!(df_hybrid_kkt, schema)
             df_madncl = select(existing_results, r"madncl$")
             rename!(df_madncl, Symbol.(replace.(String.(names(df_madncl)), "_madncl" => "")))
+            df_madncl = enforce_schema!(df_madncl, schema)
+
         end
         
         
@@ -730,70 +757,86 @@ function solve_static_cases(cases, tol, coords, hardware; case_style = "default"
 
         if hardware == "GPU"
             #GPU 
-            m_gpu, v_gpu, c_gpu = opf_model(case; backend = CUDABackend(), form=form)   
-            push!(df_top, (m_gpu.meta.nvar, m_gpu.meta.ncon, case))
+            let
+                m_gpu, v_gpu, c_gpu = opf_model(case; backend = CUDABackend(), form=form)   
+                push!(df_top, (m_gpu.meta.nvar, m_gpu.meta.ncon, case))
 
-            try
-                result_lifted_kkt = madnlp(m_gpu, tol=tol, max_wall_time = max_wall_time, disable_garbage_collector=true, dual_initialized=true)
-                c = evaluate(m_gpu, result_lifted_kkt)
-                push!(df_lifted_kkt, (i, result_lifted_kkt.counters.k, result_lifted_kkt.counters.total_time, result_lifted_kkt.counters.init_time, result_lifted_kkt.counters.eval_function_time, 
-                result_lifted_kkt.counters.linear_solver_time, termination_code(result_lifted_kkt.status), result_lifted_kkt.objective, c))
-            catch e
-                if occursin("Out of GPU memory", sprint(showerror, e))
-                    @warn "GPU OOM on this problem, skipping..."
-                    push!(df_lifted_kkt, (i, "-", max_wall_time, "-", "-", "-", "me", "-", "-"))
-                else
-                    rethrow(e)
+                try
+                    result_lifted_kkt = madnlp(m_gpu, tol=tol, max_wall_time = max_wall_time, disable_garbage_collector=false, dual_initialized=true)
+                    c = evaluate(m_gpu, result_lifted_kkt)
+                    push!(df_lifted_kkt, (i, result_lifted_kkt.counters.k, result_lifted_kkt.counters.total_time, result_lifted_kkt.counters.init_time, result_lifted_kkt.counters.eval_function_time, 
+                    result_lifted_kkt.counters.linear_solver_time, termination_code(result_lifted_kkt.status), result_lifted_kkt.objective, c))
+                catch e
+                    if occursin("Out of GPU memory", sprint(showerror, e))
+                        @warn "GPU OOM on this problem, skipping..."
+                        push!(df_lifted_kkt, (i, "-", max_wall_time, "-", "-", "-", "me", "-", "-"))
+                    else
+                        rethrow(e)
+                    end
                 end
             end
-            
-            result_lifted_kkt = nothing
             GC.gc()
             CUDA.reclaim()
+            println("lifted")
+            CUDA.memory_status()
+                
 
-            try
+            let 
+                m_gpu, v_gpu, c_gpu = opf_model(case; backend = CUDABackend(), form=form)
+                try
 
-                solver = MadNLP.MadNLPSolver(m_gpu; tol=tol, max_wall_time = max_wall_time, disable_garbage_collector=true, dual_initialized=true, linear_solver=MadNLPGPU.CUDSSSolver,
-                                            cudss_algorithm=MadNLP.LDL,
-                                            kkt_system=HybridKKT.HybridCondensedKKTSystem,
-                                            equality_treatment=MadNLP.EnforceEquality,
-                                            fixed_variable_treatment=MadNLP.MakeParameter,)
-                solver.kkt.gamma[] = 1e7
-                result_hybrid_kkt = MadNLP.solve!(solver)
+                    solver = MadNLP.MadNLPSolver(m_gpu; tol=tol, max_wall_time = max_wall_time, disable_garbage_collector=false, dual_initialized=true, linear_solver=MadNLPGPU.CUDSSSolver,
+                                                cudss_algorithm=MadNLP.LDL,
+                                                kkt_system=HybridKKT.HybridCondensedKKTSystem,
+                                                equality_treatment=MadNLP.EnforceEquality,
+                                                fixed_variable_treatment=MadNLP.MakeParameter,)
+                    solver.kkt.gamma[] = 1e7
+                    result_hybrid_kkt = MadNLP.solve!(solver)
 
-                c = evaluate(m_gpu, result_hybrid_kkt)
-                push!(df_hybrid_kkt, (i, result_hybrid_kkt.counters.k, result_hybrid_kkt.counters.total_time, result_hybrid_kkt.counters.init_time, result_hybrid_kkt.counters.eval_function_time, 
-                result_hybrid_kkt.counters.linear_solver_time, termination_code(result_hybrid_kkt.status), result_hybrid_kkt.objective, c))
-            catch e
-                if occursin("Out of GPU memory", sprint(showerror, e))
-                    @warn "GPU OOM on this problem, skipping..."
-                    push!(df_hybrid_kkt, (i, "-", max_wall_time, "-", "-", "-", "me", "-", "-"))
-                else
-                    rethrow(e)
+                    c = evaluate(m_gpu, result_hybrid_kkt)
+                    push!(df_hybrid_kkt, (i, result_hybrid_kkt.counters.k, result_hybrid_kkt.counters.total_time, result_hybrid_kkt.counters.init_time, result_hybrid_kkt.counters.eval_function_time, 
+                    result_hybrid_kkt.counters.linear_solver_time, termination_code(result_hybrid_kkt.status), result_hybrid_kkt.objective, c))
+                catch e
+                    if occursin("Out of GPU memory", sprint(showerror, e))
+                        @warn "GPU OOM on this problem, skipping..."
+                        push!(df_hybrid_kkt, (i, "-", max_wall_time, "-", "-", "-", "me", "-", "-"))
+                    else
+                        rethrow(e)
+                    end
                 end
-            end
 
-            result_hybrid_kkt = nothing
+                
+            end
             GC.gc()
             CUDA.reclaim()
+            println("hybrid")
+            CUDA.memory_status()
 
-            try
-                result_madncl = MadNCL.madncl(m_gpu, tol=tol, max_wall_time = max_wall_time, disable_garbage_collector=true, dual_initialized=true)
-                c = evaluate(m_gpu, result_madncl)
-                push!(df_madncl, (i, result_madncl.counters.k, result_madncl.counters.total_time, result_madncl.counters.init_time, result_madncl.counters.eval_function_time, 
-                result_madncl.counters.linear_solver_time, termination_code(result_madncl.status), result_madncl.objective, c))
-            catch e
-                if occursin("Out of GPU memory", sprint(showerror, e))
-                    @warn "GPU OOM on this problem, skipping..."
-                    push!(df_madncl, (i, "-", max_wall_time, "-", "-", "-", "me", "-", "-"))
-                else
-                    rethrow(e)
+            let
+                m_gpu, v_gpu, c_gpu = opf_model(case; backend = CUDABackend(), form=form)
+
+                try
+                    result_madncl = MadNCL.madncl(m_gpu, tol=tol, max_wall_time = max_wall_time, disable_garbage_collector=false, dual_initialized=true)
+                    c = evaluate(m_gpu, result_madncl)
+                    push!(df_madncl, (i, result_madncl.counters.k, result_madncl.counters.total_time, result_madncl.counters.init_time, result_madncl.counters.eval_function_time, 
+                    result_madncl.counters.linear_solver_time, termination_code(result_madncl.status), result_madncl.objective, c))
+                catch e
+                    if occursin("Out of GPU memory", sprint(showerror, e))
+                        @warn "GPU OOM on this problem, skipping..."
+                        push!(df_madncl, (i, "-", max_wall_time, "-", "-", "-", "me", "-", "-"))
+                    else
+                        rethrow(e)
+                    end
                 end
+                result_madncl = nothing
+                m_gpu = nothing
+                v_gpu = nothing
+                c_gpu = nothing
             end
-
-            result_madncl = nothing
             GC.gc()
             CUDA.reclaim()
+            println("madncl")
+            CUDA.memory_status()
 
             opf_results = Dict(:top => df_top,
             :lifted_kkt => df_lifted_kkt,
