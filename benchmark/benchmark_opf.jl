@@ -607,14 +607,198 @@ function merge_static_data(gpu_filename, cpu_filename, save_folder)
     generate_tex_opf(opf_results; filename = save_folder*replace(replace(gpu_filename, "_GPU" => ""), "saved_raw_data/" => ""))
 end
     
+function summary_table(filenames, max_wall_time, delta, save_prefix)
+    df = DataFrame(tol = Any[], solver = Any[], small_count = Int[], small_time = Float64[], med_count = Int[], med_time = Float64[], large_count = Int[], large_time = Float64[], total_count = Int[], total_time = Float64[] )
+    
+    n_small = 0
+    n_med = 0
+    n_large = 0
+    n_total = 0 
+    for file in filenames
+        results = CSV.read(file, DataFrame)
+        df_lifted_kkt = Dict(:small_count => 0, :small_time => Float64(1), :med_count => 0, :med_time => Float64(1), :large_count => 0, :large_time => Float64(1), :total_count => 0, :total_time => Float64(1) )
+        df_hybrid_kkt = Dict(:small_count => 0, :small_time => Float64(1), :med_count => 0, :med_time => Float64(1), :large_count => 0, :large_time => Float64(1), :total_count => 0, :total_time => Float64(1) )
+        df_madncl = Dict(:small_count => 0, :small_time => Float64(1), :med_count => 0, :med_time => Float64(1), :large_count => 0, :large_time => Float64(1), :total_count => 0, :total_time => Float64(1) )
+        df_ma27 = Dict(:small_count => 0, :small_time => Float64(1), :med_count => 0, :med_time => Float64(1), :large_count => 0, :large_time => Float64(1), :total_count => 0, :total_time => Float64(1) )
+        df_ma86 = Dict(:small_count => 0, :small_time => Float64(1), :med_count => 0, :med_time => Float64(1), :large_count => 0, :large_time => Float64(1), :total_count => 0, :total_time => Float64(1) )
+
+        matched_solvers = Dict("MadNLP+LiftedKKT (GPU)" => df_lifted_kkt,
+                    "MadNLP+HybridKKT (GPU)" => df_hybrid_kkt,
+                    "MadNCL (GPU)" => df_madncl,
+                    "Ipopt+Ma27 (CPU)" => df_ma27,
+                    "MadNLP+Ma86 (CPU)" => df_ma86)
+
+        n_small = 0
+        n_med = 0
+        n_large = 0
+        n_total = nrow(results)
+        for row in eachrow(results)
+            if row["nvars"] < 2000
+                count_label = :small_count
+                time_label = :small_time
+                n_small += 1
+            elseif row["nvars"] < 20000
+                count_label = :med_count
+                time_label = :med_time
+                n_med += 1
+            else
+                count_label = :large_count
+                time_label = :large_time
+                n_large += 1
+            end
+
+            for solver_name in keys(matched_solvers)
+                termination_label = solver_name * "_termination"
+                if row[termination_label] == " "
+                    matched_solvers[solver_name][count_label] += 1
+                    matched_solvers[solver_name][:total_count] += 1
+                    matched_solvers[solver_name][time_label] = matched_solvers[solver_name][time_label]*(row[solver_name*"_soltime"] + delta)
+                    matched_solvers[solver_name][:total_time] = matched_solvers[solver_name][:total_time]*(row[solver_name*"_soltime"] + delta)
+                else
+                    matched_solvers[solver_name][time_label] = matched_solvers[solver_name][time_label]*(max_wall_time + delta)
+                    matched_solvers[solver_name][:total_time] = matched_solvers[solver_name][:total_time]*(max_wall_time + delta)
+                end
+            end  
+        end
+        n = nrow(results)
+        n_dict = Dict(:small_time => n_small, :med_time => n_med, :large_time => n_large, :total_time => n)
+
+        m = match(r"tol_(\d+e\d+)", file)
+
+        if m !== nothing
+            val = m.captures[1]              # "1e4"
+            val = replace(val, "e" => "e-")  # insert the missing minus
+            tol = parse(Float64, val)  # numeric value: 1.0e-4
+        end
+
+        for solver_name in keys(matched_solvers)
+            for size_symbol in [:small_time, :med_time, :large_time, :total_time]
+                matched_solvers[solver_name][size_symbol] = matched_solvers[solver_name][size_symbol]^(1/n_dict[size_symbol]) - delta
+            end
+            push!(df, (tol, solver_name, matched_solvers[solver_name][:small_count], matched_solvers[solver_name][:small_time], matched_solvers[solver_name][:med_count],
+            matched_solvers[solver_name][:med_time], matched_solvers[solver_name][:large_count], matched_solvers[solver_name][:large_time], matched_solvers[solver_name][:total_count], matched_solvers[solver_name][:total_time]
+            ))
+        end
+        
+    end
+    
+    CSV.write(save_prefix * ".csv", df)
+    open(save_prefix * ".txt", "w") do io
+        show(io, df, allrows=true, allcols=true)
+    end
+
+    # ----------------
+    # Build LaTeX table
+    # ----------------
+    
+
+    header = """
+\\begin{center}
+\\renewcommand{\\arraystretch}{0.9}
+\\begin{tabular}{|l|l|cc|cc|cc|cc|}
+\\hline
+ & & \\multicolumn{2}{c|}{\\textbf{Small ($(n_small))}} & \\multicolumn{2}{c|}{\\textbf{Medium ($(n_med))}} & \\multicolumn{2}{c|}{\\textbf{Large ($(n_large))}} & \\multicolumn{2}{c|}{\\textbf{Total ($(n_total))}} \\\\
+ & & \\textbf{Count} & \\textbf{Time} & \\textbf{Count} & \\textbf{Time} & \\textbf{Count} & \\textbf{Time} & \\textbf{Count} & \\textbf{Time} \\\\
+\\hline
+"""
+
+    solver_order = [
+        "MadNLP+LiftedKKT (GPU)",
+        "MadNLP+HybridKKT (GPU)",
+        "MadNCL (GPU)",
+        "Ipopt+Ma27 (CPU)",
+        "MadNLP+Ma86 (CPU)"
+    ]
+
+    body = IOBuffer()
+    for tol in unique(df.tol)
+        tol_rows = filter(row -> row.tol == tol, df)
+        exp = Int(round(log10(1/tol)))
+        tol_str = "\\Large\\textbf{\$10^{-$exp}\$}"
+
+        # reorder rows by solver_order
+        rows = collect(eachrow(tol_rows))  # turn into iterable rows
+        sorted_rows = []
+        for s in solver_order
+            idx = findfirst(r -> r.solver == s, rows)
+            if idx !== nothing
+                push!(sorted_rows, rows[idx])
+            end
+        end
+        sorted_rows = filter(!isnothing, sorted_rows)
+
+        # collect values for highlighting
+        counts = Dict(
+            :small_count => maximum([r.small_count for r in sorted_rows]),
+            :med_count   => maximum([r.med_count   for r in sorted_rows]),
+            :large_count => maximum([r.large_count for r in sorted_rows]),
+            :total_count => maximum([r.total_count for r in sorted_rows])
+        )
+        times = Dict(
+            :small_time => minimum([r.small_time for r in sorted_rows]),
+            :med_time   => minimum([r.med_time   for r in sorted_rows]),
+            :large_time => minimum([r.large_time for r in sorted_rows]),
+            :total_time => minimum([r.total_time for r in sorted_rows])
+        )
+
+        firstrow = true
+        for r in sorted_rows
+            # helper to maybe highlight
+            function fmt(val, key; is_time=false)
+                if is_time
+                    return val == times[key] ? "\\cellcolor{blue!15}$(round(val, digits=2))" : "$(round(val,digits=2))"
+                else
+                    return val == counts[key] ? "\\cellcolor{blue!15}$(val)" : "$(val)"
+                end
+            end
+
+            line = ""
+            if firstrow
+                line *= "\\multirow{$(length(sorted_rows))}{*}{$tol_str} & "
+                firstrow = false
+            else
+                line *= " & "
+            end
+
+            line *= "\\textbf{$(r.solver)} & " *
+                    fmt(r.small_count,:small_count) * " & " * fmt(r.small_time,:small_time,is_time=true) * " & " *
+                    fmt(r.med_count,:med_count)     * " & " * fmt(r.med_time,:med_time,is_time=true)     * " & " *
+                    fmt(r.large_count,:large_count) * " & " * fmt(r.large_time,:large_time,is_time=true) * " & " *
+                    fmt(r.total_count,:total_count) * " & " * fmt(r.total_time,:total_time,is_time=true) * " \\\\"
+
+            println(body, line)
+        end
+        println(body, "\\hline")
+    end
+
+    footer = """
+\\end{tabular}
+\\end{center}
+"""
+
+    open(save_prefix * ".tex", "w") do io
+        write(io, header * String(take!(body)) * footer)
+    end
+end
 
 
-function solve_static_cases(cases, tol, coords, hardware; case_style = "default")
+            
+             
+
+function solve_benchmark_cases(cases, tol, hardware; coords = "Polar", case_style = "default", curve = [.64, .60, .58, .56, .56, .58, .64, .76, .87, .95, .99, 1.0, .99, 1.0, 1.0,
+    .97, .96, .96, .93, .92, .92, .93, .87, .72, .64], mp = false, storage = false, sc = false, corrective_action_ratio = 0.25)
 
     max_wall_time = Float64(900)
 
-    csv_filename = "saved_raw_data/benchmark_results_opf_" *hardware *"_" * case_style * "_tol_" * replace(@sprintf("%.0e", 1 / tol), r"\+0?" => "") * "_" * coords * ".csv"
-
+    if storage 
+        csv_filename = "saved_raw_data/benchmark_results_mpopf_stor_" *hardware *"_" * case_style * "_tol_" * replace(@sprintf("%.0e", 1 / tol), r"\+0?" => "") * "_" * coords * ".csv"
+    elseif mp
+        csv_filename = "saved_raw_data/benchmark_results_mpopf_" *hardware *"_" * case_style * "_tol_" * replace(@sprintf("%.0e", 1 / tol), r"\+0?" => "") * "_" * coords * ".csv"
+    elseif sc
+        csv_filename = "saved_raw_data/benchmark_results_scopf_" *hardware *"_" * case_style * "_tol_" * replace(@sprintf("%.0e", 1 / tol), r"\+0?" => "") *".csv"
+    else
+        csv_filename = "saved_raw_data/benchmark_results_opf_" *hardware *"_" * case_style * "_tol_" * replace(@sprintf("%.0e", 1 / tol), r"\+0?" => "") * "_" * coords * ".csv"
+    end
 
     if coords == "Polar"
         form = :polar
@@ -672,7 +856,15 @@ function solve_static_cases(cases, tol, coords, hardware; case_style = "default"
 
     #Compile time on smallest case
     if hardware == "GPU"
-        model_gpu, ~ = opf_model("pglib_opf_case3_lmbd"; backend = CUDABackend(), form=form)
+        if storage
+            model_gpu, ~ = mpopf_model("pglib_opf_case3_lmbd_storage", curve; backend = CUDABackend(), form=form, corrective_action_ratio = corrective_action_ratio)
+        elseif mp
+            model_gpu, ~ = mpopf_model("pglib_opf_case3_lmbd", curve; backend = CUDABackend(), form=form, corrective_action_ratio = corrective_action_ratio)
+        elseif sc
+            holder = nothing
+        else
+            model_gpu, ~ = opf_model("pglib_opf_case3_lmbd"; backend = CUDABackend(), form=form)
+        end
         ~ = madnlp(model_gpu, tol = tol, max_iter = 3, disable_garbage_collector=true, dual_initialized=true)
         ~ = MadNCL.madncl(model_gpu, tol = tol, max_iter = 3, disable_garbage_collector=true, dual_initialized=true)
         ~ = madnlp(model_gpu, tol=tol, max_wall_time = max_wall_time, disable_garbage_collector=true, dual_initialized=true, linear_solver=MadNLPGPU.CUDSSSolver,
@@ -704,7 +896,15 @@ function solve_static_cases(cases, tol, coords, hardware; case_style = "default"
         
         
     elseif hardware == "CPU"
-        model_cpu, ~ = opf_model("pglib_opf_case3_lmbd"; form=form)
+        if storage
+            model_cpu, ~ = mpopf_model("pglib_opf_case3_lmbd_storage", curve; form=form, corrective_action_ratio = corrective_action_ratio)
+        elseif mp
+            model_cpu, ~ = mpopf_model("pglib_opf_case3_lmbd", curve; form=form, corrective_action_ratio = corrective_action_ratio)
+        elseif sc
+            holder = nothing
+        else
+            model_cpu, ~ = opf_model("pglib_opf_case3_lmbd"; form=form)
+        end
         ~ = ipopt(model_cpu, tol = tol, max_iter = 3, dual_inf_tol=Float64(10000), constr_viol_tol=Float64(10000), compl_inf_tol=Float64(10000), bound_relax_factor = tol, linear_solver = "ma27")
         #~ = ipopt(model_cpu, tol = tol, max_iter = 3, dual_inf_tol=Float64(10000), constr_viol_tol=Float64(10000), compl_inf_tol=Float64(10000), bound_relax_factor = tol, linear_solver = "ma97")
         ~ = madnlp(model_cpu, tol = tol,
@@ -738,16 +938,28 @@ function solve_static_cases(cases, tol, coords, hardware; case_style = "default"
     
 
     for (i, case) in enumerate(cases)
-        println(case, " static")
+        println(case)
 
-        if case_style == "default"
-            case = case*".m"
-        elseif case_style == "api"
-            case = "api/"*case*"__api.m"
-        elseif case_style == "sad"
-            case = "sad/"*case*"__sad.m"
+        if !storage
+            if case_style == "default"
+                case = case*".m"
+            elseif case_style == "api"
+                case = "api/"*case*"__api.m"
+            elseif case_style == "sad"
+                case = "sad/"*case*"__sad.m"
+            else
+                error("Invalid case style")
+            end
         else
-            error("Invalid case style")
+            if case_style == "default"
+                case = case*"_storage"
+            elseif case_style == "api"
+                case = case*"__api_storage"
+            elseif case_style == "sad"
+                case = case*"__sad_storage"
+            else
+                error("Invalid case style")
+            end
         end
 
         if case in existing_cases
@@ -758,7 +970,13 @@ function solve_static_cases(cases, tol, coords, hardware; case_style = "default"
         if hardware == "GPU"
             #GPU 
             let
-                m_gpu, v_gpu, c_gpu = opf_model(case; backend = CUDABackend(), form=form)   
+                if storage || mp
+                    m_gpu, v_gpu, c_gpu = mpopf_model(case, curve; backend = CUDABackend(), form=form, corrective_action_ratio = corrective_action_ratio)  
+                elseif sc
+                    holder = nothing
+                else 
+                    m_gpu, v_gpu, c_gpu = opf_model(case; backend = CUDABackend(), form=form)
+                end   
                 push!(df_top, (m_gpu.meta.nvar, m_gpu.meta.ncon, case))
 
                 try
@@ -782,7 +1000,13 @@ function solve_static_cases(cases, tol, coords, hardware; case_style = "default"
                 
 
             let 
-                m_gpu, v_gpu, c_gpu = opf_model(case; backend = CUDABackend(), form=form)
+                if storage || mp
+                    m_gpu, v_gpu, c_gpu = mpopf_model(case, curve; backend = CUDABackend(), form=form, corrective_action_ratio = corrective_action_ratio)  
+                elseif sc
+                    holder = nothing
+                else 
+                    m_gpu, v_gpu, c_gpu = opf_model(case; backend = CUDABackend(), form=form)
+                end
                 try
 
                     solver = MadNLP.MadNLPSolver(m_gpu; tol=tol, max_wall_time = max_wall_time, disable_garbage_collector=false, dual_initialized=true, linear_solver=MadNLPGPU.CUDSSSolver,
@@ -813,7 +1037,13 @@ function solve_static_cases(cases, tol, coords, hardware; case_style = "default"
             CUDA.memory_status()
 
             let
-                m_gpu, v_gpu, c_gpu = opf_model(case; backend = CUDABackend(), form=form)
+                if storage || mp
+                    m_gpu, v_gpu, c_gpu = mpopf_model(case, curve; backend = CUDABackend(), form=form, corrective_action_ratio = corrective_action_ratio)  
+                elseif sc
+                    holder = nothing
+                else 
+                    m_gpu, v_gpu, c_gpu = opf_model(case; backend = CUDABackend(), form=form)
+                end
 
                 try
                     result_madncl = MadNCL.madncl(m_gpu, tol=tol, max_wall_time = max_wall_time, disable_garbage_collector=false, dual_initialized=true)
@@ -845,7 +1075,13 @@ function solve_static_cases(cases, tol, coords, hardware; case_style = "default"
         
         elseif hardware == "CPU"
             #CPU
-            m_cpu, v_cpu, c_cpu = opf_model(case; form=form)
+            if storage || mp
+                    m_cpu, v_cpu, c_cpu = mpopf_model(case, curve; form=form, corrective_action_ratio = corrective_action_ratio)  
+            elseif sc
+                holder = nothing
+            else 
+                m_cpu, v_cpu, c_cpu = opf_model(case; form=form)
+            end
             push!(df_top, (m_cpu.meta.nvar, m_cpu.meta.ncon, case))
 
             result_ma27 = ipopt(m_cpu, tol = tol, max_wall_time=max_wall_time, dual_inf_tol=Float64(10000), constr_viol_tol=Float64(10000), compl_inf_tol=Float64(10000), bound_relax_factor = tol, linear_solver = "ma27", honor_original_bounds = "no", print_timing_statistics = "yes", output_file = "ipopt_output")
@@ -883,11 +1119,11 @@ end
 #end
 
 curves = Dict("easy" => [.64, .60, .58, .56, .56, .58, .64, .76, .87, .95, .99, 1.0, .99, 1.0, 1.0,
-    .97, .96, .96, .93, .92, .92, .93, .87, .72, .64],
-    "medium" => [.88, .90, .88, .86, .87, .88, .9, .92, .93, .95, .97, 1.0, .99, 1.0, 1.0,
-    .97, .96, .96, .93, .92, .92, .93, .89, .85, .82],
-    "hard" => [.52, .60, .53, .59, .51, .62, .65, .76, .87, .95, .99, 1.01, .99, 1.0, 1.02,
-    .92, 1.0, .9, .93, .84, .92, .93, .85, .73, .62])
+    .97, .96, .96, .93, .92, .92, .93, .87, .72, .64],)
+    #"medium" => [.88, .90, .88, .86, .87, .88, .9, .92, .93, .95, .97, 1.0, .99, 1.0, 1.0,
+    #.97, .96, .96, .93, .92, .92, .93, .89, .85, .82],
+    #"hard" => [.52, .60, .53, .59, .51, .62, .65, .76, .87, .95, .99, 1.01, .99, 1.0, 1.02,
+    #.92, 1.0, .9, .93, .84, .92, .93, .85, .73, .62])
 
 
 function solve_mp_cases(cases, curves, tol, coords, hardware; case_style = "default", storage = false)
