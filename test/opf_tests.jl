@@ -21,6 +21,8 @@ function test_static_case(result, result_pm, result_nlp_pm, pg, qg)
 end
 
 function test_polar_voltage(result, result_pm, va, vm)
+    @info "ppolar"
+    @info result_pm
     for i in 1:length(result_pm["solution"]["bus"])
         @test isapprox(Array(solution(result, va))[i], result_pm["solution"]["bus"][string(i)]["va"], atol = result.options.tol*100)
         @test isapprox(Array(solution(result, vm))[i], result_pm["solution"]["bus"][string(i)]["vm"], rtol = result.options.tol*100)
@@ -28,6 +30,8 @@ function test_polar_voltage(result, result_pm, va, vm)
 end
 
 function test_rect_voltage(result, result_pm, vr, vim)
+    @info "rrect"
+    @info result_pm
     for i in 1:length(result_pm["solution"]["bus"])
         @test isapprox(Array(solution(result, vr))[i], result_pm["solution"]["bus"][string(i)]["vr"], rtol = result.options.tol*100)
         @test isapprox(Array(solution(result, vim))[i], result_pm["solution"]["bus"][string(i)]["vi"], atol = result.options.tol*100)

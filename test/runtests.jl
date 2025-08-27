@@ -48,6 +48,9 @@ mp_stor_test_cases = [("../data/pglib_opf_case3_lmbd_mod.m", "case3", "../data/c
                         ("../data/pglib_opf_case5_pjm_mod.m", "case5", "../data/case5_5split.Pd", "../data/case5_5split.Qd",
                         true_sol_case5_curve_stor, true_sol_case5_curve_stor_func, true_sol_case5_pregen_stor, true_sol_case5_pregen_stor_func)]
 
+static_forms = [("rect", :rect, ACRPowerModel, test_rect_voltage),
+                ("polar", :polar, ACPPowerModel, test_polar_voltage)]
+
 function example_func(d, srating)
     return d + 20/srating*d^2
 end
@@ -75,58 +78,30 @@ function runtests()
     @testset "ExaModelsPower test" begin
 
         for (T, backend) in CONFIGS
-
             for (filename, case, test_function) in test_cases
-                #Test static opf
                 data_pm = parse_pm(filename)
+                for (form_str, form, power_model, test_voltage) in static_forms
+                    m32, v32, c32 = opf_model(filename; T=Float32, backend = backend, form=form)
+                    result32 = madnlp(m32; print_level = MadNLP.ERROR)
+                    va32, vm32, pg32, qg32, p32, q32 = v32
 
-                #Polar tests
-                m, v, c = opf_model(filename; T=T, backend = backend)
-                result = madnlp(m; print_level = MadNLP.ERROR)
-                va, vm, pg, qg, p, q = v
+                    m64, v64, c64 = opf_model(filename; T=Float64, backend = backend, form=form)
+                    result64 = madnlp(m64; print_level = MadNLP.ERROR)
+                    va64, vm64, pg64, qg64, p64, q64 = v64
+                    
+                    nlp_solver = JuMP.optimizer_with_attributes(Ipopt.Optimizer, "tol"=>Float64(result64.options.tol), "print_level"=>0)
+                    result_pm = solve_opf(filename, power_model, nlp_solver)
 
-                nlp_solver = JuMP.optimizer_with_attributes(Ipopt.Optimizer, "tol"=>Float64(result.options.tol), "print_level"=>0)
-                result_pm = solve_opf(filename,ACPPowerModel, nlp_solver)
+                    m_pm = JuMP.Model()
+                    pm = instantiate_model(data_pm, power_model, PowerModels.build_opf, jump_model = m_pm)
+                    nlp_pm = MathOptNLPModel(m_pm)
+                    result_nlp_pm = madnlp(nlp_pm; print_level = MadNLP.ERROR)
 
-                
-                m_pm = JuMP.Model()
-                pm = instantiate_model(data_pm, ACPPowerModel, PowerModels.build_opf, jump_model = m_pm)
-                nlp_pm = MathOptNLPModel(m_pm)
-                result_nlp_pm = madnlp(nlp_pm; print_level = MadNLP.ERROR)
-
-        
-                @testset "$(case), static, $(T), $(backend), polar" begin
-                    if T == Float32
-                        m64, v64, c64 = opf_model(filename; T=Float64, backend = backend)
-                        result = madnlp(m64; print_level = MadNLP.ERROR)
-                        test_float32(m, m64, result, backend)
-                    else
-                        eval(test_function)(result, result_pm, result_nlp_pm, pg, qg, p, q)
-                        test_polar_voltage(result, result_pm, va, vm)
-                    end
-                end
-
-                #Rectangular tests
-                m, v, c = eval(opf_model)(filename; T=T, backend = backend, form = :rect)
-                result = madnlp(m; print_level = MadNLP.ERROR)
-                vr, vim, pg, qg, p, q = v
-
-                nlp_solver = JuMP.optimizer_with_attributes(Ipopt.Optimizer, "tol"=>Float64(result.options.tol), "print_level"=>0)
-                result_pm = solve_opf(filename, ACRPowerModel, nlp_solver)
-
-                m_pm = JuMP.Model()
-                pm = instantiate_model(data_pm, ACRPowerModel, PowerModels.build_opf, jump_model = m_pm)
-                nlp_pm = MathOptNLPModel(m_pm)
-                result_nlp_pm = madnlp(nlp_pm; print_level = MadNLP.ERROR)
-        
-                @testset "$(case), static, $(T), $(backend), rect" begin
-                    if T == Float32
-                        m64, v64, c64 = opf_model(filename; T=Float64, backend = backend, form = :rect)
-                        result = madnlp(m64; print_level = MadNLP.ERROR)
-                        test_float32(m, m64, result, backend)
-                    else
-                        eval(test_function)(result, result_pm, result_nlp_pm, pg, qg, p, q)
-                        test_rect_voltage(result, result_pm, vr, vim)
+                    @info form_str
+                    @testset "$case, static, $backend, $form_str" begin
+                        test_float32(m32, m64, result64, backend)
+                        eval(test_function)(result64, result_pm, result_nlp_pm, pg64, qg64, p64, q64)
+                        test_voltage(result64, result_pm, va64, vm64)
                     end
                 end
             end
@@ -136,54 +111,42 @@ function runtests()
                 for (filename, case, Pd_pregen, Qd_pregen, true_sol_curve, true_sol_pregen) in mp_test_cases
                     #Curve = [1, .9, .8, .95, 1]
 
-                    m, v, c = eval(mpopf_model)(filename, [1, .9, .8, .95, 1]; T = T, backend = backend, form = symbol)
-                    result = madnlp(m; print_level = MadNLP.ERROR)
+                    m32, v32, c32 = eval(mpopf_model)(filename, [1, .9, .8, .95, 1]; T = Float32, backend = backend, form = symbol)
+                    result32 = madnlp(m32; print_level = MadNLP.ERROR)
+                    m64, v64, c64 = eval(mpopf_model)(filename, [1, .9, .8, .95, 1]; T = Float64, backend = backend, form = symbol)
+                    result64 = madnlp(m64; print_level = MadNLP.ERROR)
                     @testset "$(case), MP, $(T), $(backend), curve, $(form_str)" begin
-                        if T == Float32
-                            m64, v64, c64 = eval(mpopf_model)(filename, [1, .9, .8, .95, 1]; T=Float64, backend = backend, form = symbol)
-                            result = madnlp(m64; print_level = MadNLP.ERROR)
-                            test_float32(m, m64, result, backend)
-                        else
-                            test_mp_case(result, true_sol_curve)
-                        end
+                        test_float32(m32, m64, result64, backend)
+                        test_mp_case(result64, true_sol_curve)
                     end
                     #w function
-                    m, v, c = eval(mpopf_model)(filename, [1, .9, .8, .95, 1], example_func; T = T, backend = backend, form = symbol)
-                    result = madnlp(m; print_level = MadNLP.ERROR)
+                    m32, v32, c32 = eval(mpopf_model)(filename, [1, .9, .8, .95, 1], example_func; T = Float32, backend = backend, form = symbol)
+                    result32 = madnlp(m32; print_level = MadNLP.ERROR)
+                    m64, v64, c64 = eval(mpopf_model)(filename, [1, .9, .8, .95, 1], example_func; T = Float64, backend = backend, form = symbol)
+                    result64 = madnlp(m64; print_level = MadNLP.ERROR)
                     @testset "$(case), MP, $(T), $(backend), curve, $(form_str), func" begin
-                        if T == Float32
-                            m64, v64, c64 = eval(mpopf_model)(filename, [1, .9, .8, .95, 1], example_func; T=Float64, backend = backend, form = symbol)
-                            result = madnlp(m64; print_level = MadNLP.ERROR)
-                            test_float32(m, m64, result, backend)
-                        else
-                            test_mp_case(result, true_sol_curve)
-                        end
+                        test_float32(m32, m64, result64, backend)
+                        test_mp_case(result64, true_sol_curve)
                     end
                 
 
                     #Pregenerated Pd and Qd
-                    m, v, c = eval(mpopf_model)(filename, Pd_pregen, Qd_pregen; T = T, backend = backend, form = symbol)
-                    result = madnlp(m; print_level = MadNLP.ERROR)
+                    m32, v32, c32 = eval(mpopf_model)(filename, Pd_pregen, Qd_pregen; T = Float32, backend = backend, form = symbol)
+                    result32 = madnlp(m32; print_level = MadNLP.ERROR)
+                    m64, v64, c64 = eval(mpopf_model)(filename, Pd_pregen, Qd_pregen; T = Float64, backend = backend, form = symbol)
+                    result64 = madnlp(m64; print_level = MadNLP.ERROR)
                     @testset "$(case), MP, $(T), $(backend), pregen, $(form_str)" begin
-                        if T == Float32
-                            m64, v64, c64 = eval(mpopf_model)(filename, Pd_pregen, Qd_pregen; T=Float64, backend = backend, form = symbol)
-                            result = madnlp(m64; print_level = MadNLP.ERROR)
-                            test_float32(m, m64, result, backend)
-                        else
-                            test_mp_case(result, true_sol_pregen)
-                        end
+                        test_float32(m32, m64, result64, backend)
+                        test_mp_case(result64, true_sol_pregen)
                     end
                     #w function
-                    m, v, c = eval(mpopf_model)(filename, Pd_pregen, Qd_pregen, example_func; T = T, backend = backend, form = symbol)
-                    result = madnlp(m; print_level = MadNLP.ERROR)
+                    m32, v32, c32 = eval(mpopf_model)(filename, Pd_pregen, Qd_pregen, example_func; T = Float32, backend = backend, form = symbol)
+                    result32 = madnlp(m32; print_level = MadNLP.ERROR)
+                    m64, v64, c64 = eval(mpopf_model)(filename, Pd_pregen, Qd_pregen, example_func; T = Float64, backend = backend, form = symbol)
+                    result64 = madnlp(m64; print_level = MadNLP.ERROR)
                     @testset "$(case), MP, $(T), $(backend), pregen, $(form_str), func" begin
-                        if T == Float32
-                            m64, v64, c64 = eval(mpopf_model)(filename, Pd_pregen, Qd_pregen, example_func; T=Float64, backend = backend, form = symbol)
-                            result = madnlp(m64; print_level = MadNLP.ERROR)
-                            test_float32(m, m64, result, backend)
-                        else
-                            test_mp_case(result, true_sol_pregen)
-                        end
+                        test_float32(m32, m64, result64, backend)
+                        test_mp_case(result64, true_sol_pregen)
                     end
                 end
                 
@@ -191,55 +154,43 @@ function runtests()
                 for (filename, case, Pd_pregen, Qd_pregen, true_sol_curve_stor, 
                     true_sol_curve_stor_func, true_sol_pregen_stor, true_sol_pregen_stor_func) in mp_stor_test_cases
                     
-                    m, v, c = eval(mpopf_model)(filename, [1, .9, .8, .95, 1]; T = T, backend = backend, form = symbol)
-                    result = madnlp(m; print_level = MadNLP.ERROR)
+                    m32, v32, c32 = eval(mpopf_model)(filename, [1, .9, .8, .95, 1]; T = Float32, backend = backend, form = symbol)
+                    result32 = madnlp(m32; print_level = MadNLP.ERROR)
+                    m64, v64, c64 = eval(mpopf_model)(filename, [1, .9, .8, .95, 1]; T = Float64, backend = backend, form = symbol)
+                    result64 = madnlp(m64; print_level = MadNLP.ERROR)
                     @testset "MP w storage, $(case), $(T), $(backend), curve, $(form_str)" begin
-                        if T == Float32
-                            m64, v64, c64 = eval(mpopf_model)(filename, [1, .9, .8, .95, 1]; T=Float64, backend = backend, form = symbol)
-                            result = madnlp(m64; print_level = MadNLP.ERROR)
-                            test_float32(m, m64, result, backend)
-                        else
-                            test_mp_case(result, true_sol_curve_stor)
-                        end
+                        test_float32(m32, m64, result64, backend)
+                        test_mp_case(result64, true_sol_curve_stor)
                     end
 
                     #With function
-                    m, v, c = eval(mpopf_model)(filename, [1, .9, .8, .95, 1], example_func; T = T, backend = backend, form = symbol)
-                    result = madnlp(m; print_level = MadNLP.ERROR)
+                    m32, v32, c32 = eval(mpopf_model)(filename, [1, .9, .8, .95, 1], example_func; T = Float32, backend = backend, form = symbol)
+                    result32 = madnlp(m32; print_level = MadNLP.ERROR)
+                    m64, v64, c64 = eval(mpopf_model)(filename, [1, .9, .8, .95, 1], example_func; T = Float64, backend = backend, form = symbol)
+                    result64 = madnlp(m64; print_level = MadNLP.ERROR)
                     @testset "MP w storage, $(case), $(T), $(backend), curve, $(form_str), func" begin
-                        if T == Float32
-                            m64, v64, c64 = eval(mpopf_model)(filename, [1, .9, .8, .95, 1], example_func; T=Float64, backend = backend, form = symbol)
-                            result = madnlp(m64; print_level = MadNLP.ERROR)
-                            test_float32(m, m64, result, backend)
-                        else
-                            test_mp_case(result, true_sol_curve_stor_func)
-                        end
+                        test_float32(m32, m64, result64, backend)
+                        test_mp_case(result64, true_sol_curve_stor_func)
                     end
 
                     #Pregenerated Pd and Qd
-                    m, v, c = eval(mpopf_model)(filename, Pd_pregen, Qd_pregen; T = T, backend = backend, form = symbol)
-                    result = madnlp(m; print_level = MadNLP.ERROR)
+                    m32, v32, c32 = eval(mpopf_model)(filename, Pd_pregen, Qd_pregen; T = Float32, backend = backend, form = symbol)
+                    result32 = madnlp(m32; print_level = MadNLP.ERROR)
+                    m64, v64, c64 = eval(mpopf_model)(filename, Pd_pregen, Qd_pregen; T = Float64, backend = backend, form = symbol)
+                    result64 = madnlp(m64; print_level = MadNLP.ERROR)
                     @testset "MP w storage, $(case), $(T), $(backend), pregen, $(form_str)" begin
-                        if T == Float32
-                            m64, v64, c64 = eval(mpopf_model)(filename, Pd_pregen, Qd_pregen; T=Float64, backend = backend, form = symbol)
-                            result = madnlp(m64; print_level = MadNLP.ERROR)
-                            test_float32(m, m64, result, backend)
-                        else
-                            test_mp_case(result, true_sol_pregen_stor)
-                        end
+                        test_float32(m32, m64, result64, backend)
+                        test_mp_case(result64, true_sol_pregen_stor)
                     end
 
                     #With function
-                    m, v, c = eval(mpopf_model)(filename, Pd_pregen, Qd_pregen, example_func; T = T, backend = backend, form = symbol)
-                    result = madnlp(m; print_level = MadNLP.ERROR)
+                    m32, v32, c32 = eval(mpopf_model)(filename, Pd_pregen, Qd_pregen, example_func; T = Float32, backend = backend, form = symbol)
+                    result32 = madnlp(m32; print_level = MadNLP.ERROR)
+                    m64, v64, c64 = eval(mpopf_model)(filename, Pd_pregen, Qd_pregen, example_func; T = Float64, backend = backend, form = symbol)
+                    result64 = madnlp(m64; print_level = MadNLP.ERROR)
                     @testset "MP w storage, $(case), $(T), $(backend), pregen, $(form_str), func" begin
-                        if T == Float32
-                            m64, v64, c64 = eval(mpopf_model)(filename, Pd_pregen, Qd_pregen, example_func; T=Float64, backend = backend, form = symbol)
-                            result = madnlp(m64; print_level = MadNLP.ERROR)
-                            test_float32(m, m64, result, backend)
-                        else
-                            test_mp_case(result, true_sol_pregen_stor_func)
-                        end
+                        test_float32(m32, m64, result64, backend)
+                        test_mp_case(result64, true_sol_pregen_stor_func)
                     end
                 end
             end
