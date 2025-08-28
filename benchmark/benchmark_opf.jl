@@ -786,9 +786,12 @@ end
              
 
 function solve_benchmark_cases(cases, tol, hardware; coords = "Polar", case_style = "default", curve = [.64, .60, .58, .56, .56, .58, .64, .76, .87, .95, .99, 1.0, .99, 1.0, 1.0,
-    .97, .96, .96, .93, .92, .92, .93, .87, .72, .64], mp = false, storage = false, sc = false, corrective_action_ratio = 0.25)
+    .97, .96, .96, .93, .92, .92, .93, .87, .72, .64], mp = false, storage = false, sc = false, corrective_action_ratio = 0.25, include_ctg = true)
 
     max_wall_time = Float64(900)
+    if sc
+        max_wall_time = Float64(10000)
+    end
 
     if storage 
         csv_filename = "saved_raw_data/benchmark_results_mpopf_stor_" *hardware *"_" * case_style * "_tol_" * replace(@sprintf("%.0e", 1 / tol), r"\+0?" => "") * "_" * coords * ".csv"
@@ -861,7 +864,9 @@ function solve_benchmark_cases(cases, tol, hardware; coords = "Polar", case_styl
         elseif mp
             model_gpu, ~ = mpopf_model("pglib_opf_case3_lmbd", curve; backend = CUDABackend(), form=form, corrective_action_ratio = corrective_action_ratio)
         elseif sc
-            holder = nothing
+            test_case = "data/C3E4N00073D1_scenario_303.json"
+            test_uc_case = "data/C3E4N00073D1_scenario_303_solution.json"
+            model_gpu, ~ = scopf_model(test_case, test_uc_case; backend = CUDABackend(), include_ctg = include_ctg)
         else
             model_gpu, ~ = opf_model("pglib_opf_case3_lmbd"; backend = CUDABackend(), form=form)
         end
@@ -901,7 +906,9 @@ function solve_benchmark_cases(cases, tol, hardware; coords = "Polar", case_styl
         elseif mp
             model_cpu, ~ = mpopf_model("pglib_opf_case3_lmbd", curve; form=form, corrective_action_ratio = corrective_action_ratio)
         elseif sc
-            holder = nothing
+            test_case = "data/C3E4N00073D1_scenario_303.json"
+            test_uc_case = "data/C3E4N00073D1_scenario_303_solution.json"
+            model_cpu, ~ = scopf_model(test_case, test_uc_case; include_ctg = include_ctg)
         else
             model_cpu, ~ = opf_model("pglib_opf_case3_lmbd"; form=form)
         end
@@ -940,7 +947,10 @@ function solve_benchmark_cases(cases, tol, hardware; coords = "Polar", case_styl
     for (i, case) in enumerate(cases)
         println(case)
 
-        if !storage
+        if sc
+            (problem_case, uc_case) = case
+            case = replace(problem_case, r"^data/|\.json$" => "")
+        elseif !storage
             if case_style == "default"
                 case = case*".m"
             elseif case_style == "api"
@@ -973,7 +983,7 @@ function solve_benchmark_cases(cases, tol, hardware; coords = "Polar", case_styl
                 if storage || mp
                     m_gpu, v_gpu, c_gpu = mpopf_model(case, curve; backend = CUDABackend(), form=form, corrective_action_ratio = corrective_action_ratio)  
                 elseif sc
-                    holder = nothing
+                    m_gpu, v_gpu, c_gpu = scopf_model(problem_case, uc_case; backend = CUDABackend(), include_ctg = include_ctg)   
                 else 
                     m_gpu, v_gpu, c_gpu = opf_model(case; backend = CUDABackend(), form=form)
                 end   
@@ -1003,7 +1013,7 @@ function solve_benchmark_cases(cases, tol, hardware; coords = "Polar", case_styl
                 if storage || mp
                     m_gpu, v_gpu, c_gpu = mpopf_model(case, curve; backend = CUDABackend(), form=form, corrective_action_ratio = corrective_action_ratio)  
                 elseif sc
-                    holder = nothing
+                    m_gpu, v_gpu, c_gpu = scopf_model(problem_case, uc_case; backend = CUDABackend(), include_ctg = include_ctg)   
                 else 
                     m_gpu, v_gpu, c_gpu = opf_model(case; backend = CUDABackend(), form=form)
                 end
@@ -1040,7 +1050,7 @@ function solve_benchmark_cases(cases, tol, hardware; coords = "Polar", case_styl
                 if storage || mp
                     m_gpu, v_gpu, c_gpu = mpopf_model(case, curve; backend = CUDABackend(), form=form, corrective_action_ratio = corrective_action_ratio)  
                 elseif sc
-                    holder = nothing
+                    m_gpu, v_gpu, c_gpu = scopf_model(problem_case, uc_case; backend = CUDABackend(), include_ctg = include_ctg)   
                 else 
                     m_gpu, v_gpu, c_gpu = opf_model(case; backend = CUDABackend(), form=form)
                 end
@@ -1076,9 +1086,9 @@ function solve_benchmark_cases(cases, tol, hardware; coords = "Polar", case_styl
         elseif hardware == "CPU"
             #CPU
             if storage || mp
-                    m_cpu, v_cpu, c_cpu = mpopf_model(case, curve; form=form, corrective_action_ratio = corrective_action_ratio)  
+                m_cpu, v_cpu, c_cpu = mpopf_model(case, curve; form=form, corrective_action_ratio = corrective_action_ratio)  
             elseif sc
-                holder = nothing
+                m_cpu, v_cpu, c_cpu = scopf_model(problem_case, uc_case; include_ctg = include_ctg)
             else 
                 m_cpu, v_cpu, c_cpu = opf_model(case; form=form)
             end
@@ -1896,7 +1906,7 @@ function solve_sc_cases(cases, tol, include_ctg, hardware)
                 :hybrid_kkt => df_hybrid_kkt,
                 :madncl => df_madncl,)
         elseif hardware == "CPU"
-            m_cpu, v_cpu, c_cpu = scopf_model(problem_case, uc_case); include_ctg = include_ctg
+            m_cpu, v_cpu, c_cpu = scopf_model(problem_case, uc_case; include_ctg = include_ctg)
             push!(df_top, (m_cpu.meta.nvar, m_cpu.meta.ncon, replace(problem_case, r"^data/|\.json$" => "")))
 
             result_ma27 = ipopt(m_cpu, tol = tol, max_wall_time=max_wall_time, dual_inf_tol=Float64(10000), constr_viol_tol=Float64(10000), compl_inf_tol=Float64(10000), bound_relax_factor = tol, linear_solver = "ma27", honor_original_bounds = "no", print_timing_statistics = "yes", output_file = "ipopt_output")
