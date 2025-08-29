@@ -1,0 +1,21 @@
+\begin{center}
+\renewcommand{\arraystretch}{0.9}
+\begin{tabular}{|l|l|cc|cc|cc|cc|}
+\hline
+ & & \multicolumn{2}{c|}{\textbf{Small (16)}} & \multicolumn{2}{c|}{\textbf{Medium (16)}} & \multicolumn{2}{c|}{\textbf{Large (34)}} & \multicolumn{2}{c|}{\textbf{Total (66)}} \\
+ & & \textbf{Count} & \textbf{Time} & \textbf{Count} & \textbf{Time} & \textbf{Count} & \textbf{Time} & \textbf{Count} & \textbf{Time} \\
+\hline
+\multirow{5}{*}{\Large\textbf{$10^{-4}$}} & \textbf{MadNLP+LiftedKKT (GPU)} & \cellcolor{blue!15}16 & 0.42 & \cellcolor{blue!15}16 & \cellcolor{blue!15}0.74 & \cellcolor{blue!15}31 & \cellcolor{blue!15}8.22 & \cellcolor{blue!15}63 & \cellcolor{blue!15}4.0 \\
+ & \textbf{MadNLP+HybridKKT (GPU)} & \cellcolor{blue!15}16 & 0.18 & 14 & 8.48 & 23 & 39.68 & 53 & 16.62 \\
+ & \textbf{MadNCL (GPU)} & 15 & 3.77 & \cellcolor{blue!15}16 & 0.94 & 26 & 26.36 & 57 & 11.47 \\
+ & \textbf{Ipopt+Ma27 (CPU)} & \cellcolor{blue!15}16 & \cellcolor{blue!15}0.03 & \cellcolor{blue!15}16 & 0.92 & 30 & 21.75 & 62 & 8.54 \\
+ & \textbf{MadNLP+Ma86 (CPU)} & \cellcolor{blue!15}16 & 0.09 & 15 & 5.76 & 29 & 36.18 & 60 & 14.61 \\
+\hline
+\multirow{5}{*}{\Large\textbf{$10^{-8}$}} & \textbf{MadNLP+LiftedKKT (GPU)} & \cellcolor{blue!15}16 & 0.33 & 15 & 5.6 & 28 & \cellcolor{blue!15}20.69 & 59 & 10.0 \\
+ & \textbf{MadNLP+HybridKKT (GPU)} & \cellcolor{blue!15}16 & 0.21 & 13 & 14.7 & 18 & 87.25 & 47 & 30.4 \\
+ & \textbf{MadNCL (GPU)} & 15 & 3.82 & \cellcolor{blue!15}16 & 3.07 & 26 & 41.19 & 57 & 16.76 \\
+ & \textbf{Ipopt+Ma27 (CPU)} & \cellcolor{blue!15}16 & \cellcolor{blue!15}0.04 & \cellcolor{blue!15}16 & \cellcolor{blue!15}0.95 & \cellcolor{blue!15}30 & 22.83 & \cellcolor{blue!15}62 & \cellcolor{blue!15}8.88 \\
+ & \textbf{MadNLP+Ma86 (CPU)} & \cellcolor{blue!15}16 & 0.14 & 15 & 7.71 & 27 & 49.1 & 58 & 18.78 \\
+\hline
+\end{tabular}
+\end{center}
