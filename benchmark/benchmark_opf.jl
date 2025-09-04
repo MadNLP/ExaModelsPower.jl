@@ -1,5 +1,5 @@
 
-using MadNLPHSL, NLPModelsIpopt, NLPModels, LinearAlgebra, CSV, DataFrames, PrettyTables, Printf, Plots, SolverBenchmark, MadNCL, HybridKKT, DataStructures
+using MadNLPHSL, NLPModelsIpopt, NLPModels, LinearAlgebra, CSV, DataFrames, PrettyTables, Printf, Plots, SolverBenchmark, MadNCL, HybridKKT, DataStructures, CUDA, ExaModelsPower, ExaModels, MadNLP, MadNLPGPU
 using PrettyTables: tf_latex_booktabs, LatexTableFormat
 
 sample_cases = ["pglib_opf_case3_lmbd", 
@@ -100,6 +100,8 @@ function termination_code(status::MadNLP.Status)
         return "a"
     elseif status == MadNLP.DIVERGING_ITERATES || status == MadNLP.DIVERGING_ITERATES
         return "i"
+    elseif status == MadNLP.RESTORATION_FAILED
+        return "r"
     else
         return "f"
     end
@@ -112,6 +114,8 @@ function termination_code(status::Symbol)
         return "a"
     elseif status == :Infeasible_Problem_Detected || status == :Diverging_Iterates
         return "i"
+    elseif status == :Restoration_Failed
+        return "r"
     else
         return "f"
     end
@@ -840,6 +844,7 @@ function solve_benchmark_cases(cases, tol, hardware; coords = "Polar", case_styl
         println("Found existing results at $csv_filename")
         existing_results = CSV.read(csv_filename, DataFrame)
     else
+        println("No existing results found")
         file_exists = false
     end
 
@@ -870,9 +875,9 @@ function solve_benchmark_cases(cases, tol, hardware; coords = "Polar", case_styl
         else
             model_gpu, ~ = opf_model("pglib_opf_case3_lmbd"; backend = CUDABackend(), form=form)
         end
-        ~ = madnlp(model_gpu, tol = tol, max_iter = 3, disable_garbage_collector=true, dual_initialized=true)
-        ~ = MadNCL.madncl(model_gpu, tol = tol, max_iter = 3, disable_garbage_collector=true, dual_initialized=true)
-        ~ = madnlp(model_gpu, tol=tol, max_wall_time = max_wall_time, disable_garbage_collector=true, dual_initialized=true, linear_solver=MadNLPGPU.CUDSSSolver,
+        ~ = madnlp(model_gpu, tol = tol, max_iter = 3, disable_garbage_collector=false, dual_initialized=true)
+        ~ = MadNCL.madncl(model_gpu, tol = tol, max_iter = 3, disable_garbage_collector=false, dual_initialized=true, ncl_options = MadNCL.NCLOptions{Float64}(scaling_max_gradient=100))
+        ~ = madnlp(model_gpu, tol=tol, max_wall_time = max_wall_time, disable_garbage_collector=false, dual_initialized=true, linear_solver=MadNLPGPU.CUDSSSolver,
                                             cudss_algorithm=MadNLP.LDL,
                                             kkt_system=HybridKKT.HybridCondensedKKTSystem,
                                             equality_treatment=MadNLP.EnforceEquality,
@@ -1056,7 +1061,7 @@ function solve_benchmark_cases(cases, tol, hardware; coords = "Polar", case_styl
                 end
 
                 try
-                    result_madncl = MadNCL.madncl(m_gpu, tol=tol, max_wall_time = max_wall_time, disable_garbage_collector=false, dual_initialized=true)
+                    result_madncl = MadNCL.madncl(m_gpu, tol=tol, max_wall_time = max_wall_time, disable_garbage_collector=false, dual_initialized=true, ncl_options = MadNCL.NCLOptions{Float64}(scaling_max_gradient=100))
                     c = evaluate(m_gpu, result_madncl)
                     push!(df_madncl, (i, result_madncl.counters.k, result_madncl.counters.total_time, result_madncl.counters.init_time, result_madncl.counters.eval_function_time, 
                     result_madncl.counters.linear_solver_time, termination_code(result_madncl.status), result_madncl.objective, c))
@@ -1094,12 +1099,14 @@ function solve_benchmark_cases(cases, tol, hardware; coords = "Polar", case_styl
             end
             push!(df_top, (m_cpu.meta.nvar, m_cpu.meta.ncon, case))
 
-            result_ma27 = ipopt(m_cpu, tol = tol, max_wall_time=max_wall_time, dual_inf_tol=Float64(10000), constr_viol_tol=Float64(10000), compl_inf_tol=Float64(10000), bound_relax_factor = tol, linear_solver = "ma27", honor_original_bounds = "no", print_timing_statistics = "yes", output_file = "ipopt_output")
+            result_ma27 = ipopt(m_cpu, tol = tol, max_wall_time=max_wall_time, dual_inf_tol=Float64(10000), 
+            constr_viol_tol=Float64(10000), compl_inf_tol=Float64(10000), bound_relax_factor = tol, linear_solver = "ma27",
+             honor_original_bounds = "no", print_timing_statistics = "yes", output_file = "ipopt_output")
             it, tot, ad = ipopt_stats("ipopt_output")
             c = evaluate(m_cpu, result_ma27)
             push!(df_ma27, (i, it, tot, ad, termination_code(result_ma27.solver_specific[:internal_msg]), result_ma27.objective, c))
 
-            result_ma86 = madnlp(m_cpu, tol = tol,
+            result_ma86 = madnlp(m_cpu, tol = tol, max_wall_time=max_wall_time,
                 kkt_system=MadNLP.SparseCondensedKKTSystem, equality_treatment=MadNLP.RelaxEquality, 
                 fixed_variable_treatment=MadNLP.RelaxBound, dual_initialized=true,
                 linear_solver=MadNLPHSL.Ma86Solver, ma86_num_threads=28)
