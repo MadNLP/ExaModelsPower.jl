@@ -612,20 +612,62 @@ function merge_static_data(gpu_filename, cpu_filename, save_folder)
 end
     
 function summary_table(filenames, max_wall_time, delta, save_prefix)
-    df = DataFrame(tol = Any[], solver = Any[], small_count = Int[], small_time = Float64[], med_count = Int[], med_time = Float64[], large_count = Int[], large_time = Float64[], total_count = Int[], total_time = Float64[] )
     
+    df = DataFrame(
+        tol = Any[],
+        solver = Any[],
+        small_count = Int[],
+        small_time = Float64[],
+        small_cvio = Float64[],
+        med_count = Int[],
+        med_time = Float64[],
+        med_cvio = Float64[],
+        large_count = Int[],
+        large_time = Float64[],
+        large_cvio = Float64[],
+        total_count = Int[],
+        total_time = Float64[],
+        total_cvio = Float64[]
+    )
+
+
     n_small = 0
     n_med = 0
     n_large = 0
     n_total = 0 
     for file in filenames
         results = CSV.read(file, DataFrame)
-        df_lifted_kkt = Dict(:small_count => 0, :small_time => Float64(1), :med_count => 0, :med_time => Float64(1), :large_count => 0, :large_time => Float64(1), :total_count => 0, :total_time => Float64(1) )
-        df_hybrid_kkt = Dict(:small_count => 0, :small_time => Float64(1), :med_count => 0, :med_time => Float64(1), :large_count => 0, :large_time => Float64(1), :total_count => 0, :total_time => Float64(1) )
-        df_madncl = Dict(:small_count => 0, :small_time => Float64(1), :med_count => 0, :med_time => Float64(1), :large_count => 0, :large_time => Float64(1), :total_count => 0, :total_time => Float64(1) )
-        df_ma27 = Dict(:small_count => 0, :small_time => Float64(1), :med_count => 0, :med_time => Float64(1), :large_count => 0, :large_time => Float64(1), :total_count => 0, :total_time => Float64(1) )
-        df_ma86 = Dict(:small_count => 0, :small_time => Float64(1), :med_count => 0, :med_time => Float64(1), :large_count => 0, :large_time => Float64(1), :total_count => 0, :total_time => Float64(1) )
-
+        df_lifted_kkt = Dict(
+            :small_count => 0, :small_time => Float64(1), :small_cvio => Float64(1),
+            :med_count => 0, :med_time => Float64(1), :med_cvio => Float64(1),
+            :large_count => 0, :large_time => Float64(1), :large_cvio => Float64(1),
+            :total_count => 0, :total_time => Float64(1), :total_cvio => Float64(1)
+        )
+        df_hybrid_kkt = Dict(
+            :small_count => 0, :small_time => Float64(1), :small_cvio => Float64(1),
+            :med_count => 0, :med_time => Float64(1), :med_cvio => Float64(1),
+            :large_count => 0, :large_time => Float64(1), :large_cvio => Float64(1),
+            :total_count => 0, :total_time => Float64(1), :total_cvio => Float64(1)
+        )
+        df_madncl = Dict(
+            :small_count => 0, :small_time => Float64(1), :small_cvio => Float64(1),
+            :med_count => 0, :med_time => Float64(1), :med_cvio => Float64(1),
+            :large_count => 0, :large_time => Float64(1), :large_cvio => Float64(1),
+            :total_count => 0, :total_time => Float64(1), :total_cvio => Float64(1)
+        )
+        df_ma27 = Dict(
+            :small_count => 0, :small_time => Float64(1), :small_cvio => Float64(1),
+            :med_count => 0, :med_time => Float64(1), :med_cvio => Float64(1),
+            :large_count => 0, :large_time => Float64(1), :large_cvio => Float64(1),
+            :total_count => 0, :total_time => Float64(1), :total_cvio => Float64(1)
+        )
+        df_ma86 = Dict(
+            :small_count => 0, :small_time => Float64(1), :small_cvio => Float64(1),
+            :med_count => 0, :med_time => Float64(1), :med_cvio => Float64(1),
+            :large_count => 0, :large_time => Float64(1), :large_cvio => Float64(1),
+            :total_count => 0, :total_time => Float64(1), :total_cvio => Float64(1)
+        )
+        
         matched_solvers = Dict("MadNLP+LiftedKKT (GPU)" => df_lifted_kkt,
                     "MadNLP+HybridKKT (GPU)" => df_hybrid_kkt,
                     "MadNCL (GPU)" => df_madncl,
@@ -640,24 +682,29 @@ function summary_table(filenames, max_wall_time, delta, save_prefix)
             if row["nvars"] < 2000
                 count_label = :small_count
                 time_label = :small_time
+                cvio_label = :small_cvio
                 n_small += 1
             elseif row["nvars"] < 20000
                 count_label = :med_count
                 time_label = :med_time
+                cvio_label = :med_cvio
                 n_med += 1
             else
                 count_label = :large_count
                 time_label = :large_time
+                cvio_label = :large_cvio
                 n_large += 1
             end
 
             for solver_name in keys(matched_solvers)
                 termination_label = solver_name * "_termination"
-                if row[termination_label] == " "
+                if row[termination_label] == " " || row[termination_label] == "a"
                     matched_solvers[solver_name][count_label] += 1
                     matched_solvers[solver_name][:total_count] += 1
                     matched_solvers[solver_name][time_label] = matched_solvers[solver_name][time_label]*(row[solver_name*"_soltime"] + delta)
                     matched_solvers[solver_name][:total_time] = matched_solvers[solver_name][:total_time]*(row[solver_name*"_soltime"] + delta)
+                    matched_solvers[solver_name][cvio_label] = matched_solvers[solver_name][cvio_label]*(row[solver_name*"_cvio"] + delta)
+                    matched_solvers[solver_name][:total_cvio] = matched_solvers[solver_name][:total_cvio]*(row[solver_name*"_cvio"] + delta)
                 else
                     matched_solvers[solver_name][time_label] = matched_solvers[solver_name][time_label]*(max_wall_time + delta)
                     matched_solvers[solver_name][:total_time] = matched_solvers[solver_name][:total_time]*(max_wall_time + delta)
@@ -666,6 +713,7 @@ function summary_table(filenames, max_wall_time, delta, save_prefix)
         end
         n = nrow(results)
         n_dict = Dict(:small_time => n_small, :med_time => n_med, :large_time => n_large, :total_time => n)
+        
 
         m = match(r"tol_(\d+e\d+)", file)
 
@@ -679,9 +727,18 @@ function summary_table(filenames, max_wall_time, delta, save_prefix)
             for size_symbol in [:small_time, :med_time, :large_time, :total_time]
                 matched_solvers[solver_name][size_symbol] = matched_solvers[solver_name][size_symbol]^(1/n_dict[size_symbol]) - delta
             end
-            push!(df, (tol, solver_name, matched_solvers[solver_name][:small_count], matched_solvers[solver_name][:small_time], matched_solvers[solver_name][:med_count],
-            matched_solvers[solver_name][:med_time], matched_solvers[solver_name][:large_count], matched_solvers[solver_name][:large_time], matched_solvers[solver_name][:total_count], matched_solvers[solver_name][:total_time]
+            for size_symbol in [:small_cvio, :med_cvio, :large_cvio, :total_cvio]
+                matched_solvers[solver_name][size_symbol] = matched_solvers[solver_name][size_symbol]^(1/matched_solvers[solver_name][Symbol(string(size_symbol)[1:end-4]*"count")]) - delta
+            end
+
+            push!(df, (
+                tol, solver_name,
+                matched_solvers[solver_name][:small_count], matched_solvers[solver_name][:small_time], matched_solvers[solver_name][:small_cvio],
+                matched_solvers[solver_name][:med_count], matched_solvers[solver_name][:med_time], matched_solvers[solver_name][:med_cvio],
+                matched_solvers[solver_name][:large_count], matched_solvers[solver_name][:large_time], matched_solvers[solver_name][:large_cvio],
+                matched_solvers[solver_name][:total_count], matched_solvers[solver_name][:total_time], matched_solvers[solver_name][:total_cvio]
             ))
+
         end
         
     end
@@ -699,13 +756,13 @@ function summary_table(filenames, max_wall_time, delta, save_prefix)
     header = """
 \\begin{center}
 \\renewcommand{\\arraystretch}{0.9}
-\\begin{tabular}{|l|l|cc|cc|cc|cc|}
+\\begin{tabular}{|l|l|ccc|ccc|ccc|ccc|}
 \\hline
- & & \\multicolumn{2}{c|}{\\textbf{Small ($(n_small))}} & \\multicolumn{2}{c|}{\\textbf{Medium ($(n_med))}} & \\multicolumn{2}{c|}{\\textbf{Large ($(n_large))}} & \\multicolumn{2}{c|}{\\textbf{Total ($(n_total))}} \\\\
- & & \\textbf{Count} & \\textbf{Time} & \\textbf{Count} & \\textbf{Time} & \\textbf{Count} & \\textbf{Time} & \\textbf{Count} & \\textbf{Time} \\\\
+ & & \\multicolumn{3}{c|}{\\textbf{Small ($(n_small))}} & \\multicolumn{3}{c|}{\\textbf{Medium ($(n_med))}} & \\multicolumn{3}{c|}{\\textbf{Large ($(n_large))}} & \\multicolumn{3}{c|}{\\textbf{Total ($(n_total))}} \\\\
+ & & \\textbf{Count} & \\textbf{Time} & \\textbf{Cvio} & \\textbf{Count} & \\textbf{Time} & \\textbf{Cvio} & \\textbf{Count} & \\textbf{Time} & \\textbf{Cvio} & \\textbf{Count} & \\textbf{Time} & \\textbf{Cvio}\\\\
 \\hline
 """
-
+ 
     solver_order = [
         "MadNLP+LiftedKKT (GPU)",
         "MadNLP+HybridKKT (GPU)",
@@ -745,12 +802,22 @@ function summary_table(filenames, max_wall_time, delta, save_prefix)
             :total_time => minimum([r.total_time for r in sorted_rows])
         )
 
+        cvios = Dict(
+            :small_cvio => minimum([r.small_cvio for r in sorted_rows]),
+            :med_cvio   => minimum([r.med_cvio   for r in sorted_rows]),
+            :large_cvio => minimum([r.large_cvio for r in sorted_rows]),
+            :total_cvio => minimum([r.total_cvio for r in sorted_rows])
+        )
+
         firstrow = true
         for r in sorted_rows
             # helper to maybe highlight
-            function fmt(val, key; is_time=false)
+            function fmt(val, key; is_time=false, is_cvio=false, times=nothing, counts=nothing, cvios=nothing)
                 if is_time
                     return val == times[key] ? "\\cellcolor{blue!15}$(round(val, digits=2))" : "$(round(val,digits=2))"
+                elseif is_cvio
+                    sval = @sprintf("%.3e", val)
+                    return val == cvios[key] ? "\\cellcolor{blue!15}$(sval)" : "$(sval)"
                 else
                     return val == counts[key] ? "\\cellcolor{blue!15}$(val)" : "$(val)"
                 end
@@ -764,11 +831,18 @@ function summary_table(filenames, max_wall_time, delta, save_prefix)
                 line *= " & "
             end
 
-            line *= "\\textbf{$(r.solver)} & " *
+            #=line *= "\\textbf{$(r.solver)} & " *
                     fmt(r.small_count,:small_count) * " & " * fmt(r.small_time,:small_time,is_time=true) * " & " *
                     fmt(r.med_count,:med_count)     * " & " * fmt(r.med_time,:med_time,is_time=true)     * " & " *
                     fmt(r.large_count,:large_count) * " & " * fmt(r.large_time,:large_time,is_time=true) * " & " *
-                    fmt(r.total_count,:total_count) * " & " * fmt(r.total_time,:total_time,is_time=true) * " \\\\"
+                    fmt(r.total_count,:total_count) * " & " * fmt(r.total_time,:total_time,is_time=true) * " \\\\"=#
+
+            line *= "\\textbf{$(r.solver)} & " *
+                fmt(r.small_count,:small_count; counts=counts) * " & " * fmt(r.small_time,:small_time,is_time=true; times=times) * " & " * fmt(r.small_cvio,:small_cvio,is_cvio=true,cvios=cvios) * " & " *
+                fmt(r.med_count,:med_count; counts=counts)     * " & " * fmt(r.med_time,:med_time,is_time=true; times=times)     * " & " * fmt(r.med_cvio,:med_cvio,is_cvio=true,cvios=cvios) * " & " *
+                fmt(r.large_count,:large_count; counts=counts) * " & " * fmt(r.large_time,:large_time,is_time=true; times=times) * " & " * fmt(r.large_cvio,:large_cvio,is_cvio=true,cvios=cvios) * " & " *
+                fmt(r.total_count,:total_count; counts=counts) * " & " * fmt(r.total_time,:total_time,is_time=true; times=times) * " & " * fmt(r.total_cvio,:total_cvio,is_cvio=true,cvios=cvios) * " \\\\"
+
 
             println(body, line)
         end
@@ -1061,7 +1135,7 @@ function solve_benchmark_cases(cases, tol, hardware; coords = "Polar", case_styl
                 end
 
                 try
-                    result_madncl = MadNCL.madncl(m_gpu, tol=tol, max_wall_time = max_wall_time, disable_garbage_collector=false, dual_initialized=true, ncl_options = MadNCL.NCLOptions{Float64}(scaling_max_gradient=100))
+                    result_madncl = MadNCL.madncl(m_gpu, tol=tol, max_wall_time = max_wall_time, disable_garbage_collector=false, dual_initialized=true, ncl_options = MadNCL.NCLOptions{Float64}(scaling_max_gradient=100, feas_tol=tol, opt_tol=tol))#, scaling=false))
                     c = evaluate(m_gpu, result_madncl)
                     push!(df_madncl, (i, result_madncl.counters.k, result_madncl.counters.total_time, result_madncl.counters.init_time, result_madncl.counters.eval_function_time, 
                     result_madncl.counters.linear_solver_time, termination_code(result_madncl.status), result_madncl.objective, c))
@@ -1802,7 +1876,13 @@ function solve_stor_cases_comp(cases, tol, coords, hardware; case_style = "defau
 end
 
 sc_cases = [("data/C3E4N00073D1_scenario_303.json", "data/C3E4N00073D1_scenario_303_solution.json"),
-("data/C3E4N00073D2_scenario_303.json", "data/C3E4N00073D2_scenario_303_solution.json"), ("data/C3E4N00073D3_scenario_303.json", "data/C3E4N00073D3_scenario_303_solution.json")]
+("data/C3E4N00073D2_scenario_303.json", "data/C3E4N00073D2_scenario_303_solution.json"),
+ ("data/C3E4N00073D3_scenario_303.json", "data/C3E4N00073D3_scenario_303_solution.json"),
+("data/C3E4N00073D2_scenario_911.json", "data/C3E4N00073D2_scenario_911_solution.json"), 
+("data/C3E4N00617D1_scenario_002.json", "data/C3E4N00617D1_scenario_002_solution.json"),
+("data/C3E4N00617D2_scenario_002.json", "data/C3E4N00617D2_scenario_002_solution.json"),
+("data/C3E4N00617D3_scenario_002.json", "data/C3E4N00617D3_scenario_002_solution.json"),
+("data/C3E4N00617D1_scenario_921.json", "data/C3E4N00617D1_scenario_921_solution.json"),]
 
 function solve_sc_cases(cases, tol, include_ctg, hardware)
 
