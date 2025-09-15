@@ -867,8 +867,10 @@ function solve_benchmark_cases(cases, tol, hardware; coords = "Polar", case_styl
     .97, .96, .96, .93, .92, .92, .93, .87, .72, .64], mp = false, storage = false, sc = false, corrective_action_ratio = 0.25, include_ctg = true)
 
     max_wall_time = Float64(900)
+    max_iter = Int64(3000)
     if sc
-        max_wall_time = Float64(10000)
+        max_wall_time = Float64(30000)
+        max_iter = Int(10000)
     end
 
     if storage 
@@ -950,7 +952,7 @@ function solve_benchmark_cases(cases, tol, hardware; coords = "Polar", case_styl
             model_gpu, ~ = opf_model("pglib_opf_case3_lmbd"; backend = CUDABackend(), form=form)
         end
         ~ = madnlp(model_gpu, tol = tol, max_iter = 3, disable_garbage_collector=false, dual_initialized=true)
-        ~ = MadNCL.madncl(model_gpu, tol = tol, max_iter = 3, disable_garbage_collector=false, dual_initialized=true, ncl_options = MadNCL.NCLOptions{Float64}(scaling_max_gradient=100))
+        ~ = MadNCL.madncl(model_gpu, tol = tol, max_iter = 3, disable_garbage_collector=false, dual_initialized=true, ncl_options = MadNCL.NCLOptions{Float64}(scaling_max_gradient=100, scaling = false))
         ~ = madnlp(model_gpu, tol=tol, max_wall_time = max_wall_time, disable_garbage_collector=false, dual_initialized=true, linear_solver=MadNLPGPU.CUDSSSolver,
                                             cudss_algorithm=MadNLP.LDL,
                                             kkt_system=HybridKKT.HybridCondensedKKTSystem,
@@ -1069,7 +1071,7 @@ function solve_benchmark_cases(cases, tol, hardware; coords = "Polar", case_styl
                 push!(df_top, (m_gpu.meta.nvar, m_gpu.meta.ncon, case))
 
                 try
-                    result_lifted_kkt = madnlp(m_gpu, tol=tol, max_wall_time = max_wall_time, disable_garbage_collector=false, dual_initialized=true)
+                    result_lifted_kkt = madnlp(m_gpu, tol=tol, max_wall_time = max_wall_time, disable_garbage_collector=false, dual_initialized=true, max_iter=max_iter)
                     c = evaluate(m_gpu, result_lifted_kkt)
                     push!(df_lifted_kkt, (i, result_lifted_kkt.counters.k, result_lifted_kkt.counters.total_time, result_lifted_kkt.counters.init_time, result_lifted_kkt.counters.eval_function_time, 
                     result_lifted_kkt.counters.linear_solver_time, termination_code(result_lifted_kkt.status), result_lifted_kkt.objective, c))
@@ -1102,7 +1104,8 @@ function solve_benchmark_cases(cases, tol, hardware; coords = "Polar", case_styl
                                                 cudss_algorithm=MadNLP.LDL,
                                                 kkt_system=HybridKKT.HybridCondensedKKTSystem,
                                                 equality_treatment=MadNLP.EnforceEquality,
-                                                fixed_variable_treatment=MadNLP.MakeParameter,)
+                                                fixed_variable_treatment=MadNLP.MakeParameter,
+                                                max_iter=max_iter)
                     solver.kkt.gamma[] = 1e7
                     result_hybrid_kkt = MadNLP.solve!(solver)
 
@@ -1135,7 +1138,8 @@ function solve_benchmark_cases(cases, tol, hardware; coords = "Polar", case_styl
                 end
 
                 try
-                    result_madncl = MadNCL.madncl(m_gpu, tol=tol, max_wall_time = max_wall_time, disable_garbage_collector=false, dual_initialized=true, ncl_options = MadNCL.NCLOptions{Float64}(scaling_max_gradient=100, feas_tol=tol, opt_tol=tol))#, scaling=false))
+                    result_madncl = MadNCL.madncl(m_gpu, tol=tol, max_wall_time = max_wall_time, disable_garbage_collector=false, dual_initialized=true, ncl_options = MadNCL.NCLOptions{Float64}(scaling_max_gradient=100, feas_tol=tol, opt_tol=tol, scaling=false)
+                    , max_iter=max_iter)
                     c = evaluate(m_gpu, result_madncl)
                     push!(df_madncl, (i, result_madncl.counters.k, result_madncl.counters.total_time, result_madncl.counters.init_time, result_madncl.counters.eval_function_time, 
                     result_madncl.counters.linear_solver_time, termination_code(result_madncl.status), result_madncl.objective, c))
@@ -1175,7 +1179,7 @@ function solve_benchmark_cases(cases, tol, hardware; coords = "Polar", case_styl
 
             result_ma27 = ipopt(m_cpu, tol = tol, max_wall_time=max_wall_time, dual_inf_tol=Float64(10000), 
             constr_viol_tol=Float64(10000), compl_inf_tol=Float64(10000), bound_relax_factor = tol, linear_solver = "ma27",
-             honor_original_bounds = "no", print_timing_statistics = "yes", output_file = "ipopt_output")
+             honor_original_bounds = "no", print_timing_statistics = "yes", output_file = "ipopt_output", max_iter=max_iter)
             it, tot, ad = ipopt_stats("ipopt_output")
             c = evaluate(m_cpu, result_ma27)
             push!(df_ma27, (i, it, tot, ad, termination_code(result_ma27.solver_specific[:internal_msg]), result_ma27.objective, c))
@@ -1183,7 +1187,7 @@ function solve_benchmark_cases(cases, tol, hardware; coords = "Polar", case_styl
             result_ma86 = madnlp(m_cpu, tol = tol, max_wall_time=max_wall_time,
                 kkt_system=MadNLP.SparseCondensedKKTSystem, equality_treatment=MadNLP.RelaxEquality, 
                 fixed_variable_treatment=MadNLP.RelaxBound, dual_initialized=true,
-                linear_solver=MadNLPHSL.Ma86Solver, ma86_num_threads=28)
+                linear_solver=MadNLPHSL.Ma86Solver, ma86_num_threads=28, max_iter=max_iter)
             c = evaluate(m_cpu, result_ma86)
             push!(df_ma86, (i, result_ma86.counters.k, result_ma86.counters.total_time, result_ma86.counters.init_time, result_ma86.counters.eval_function_time, 
                 result_ma86.counters.linear_solver_time, termination_code(result_ma86.status), result_ma86.objective, c))
