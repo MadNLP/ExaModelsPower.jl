@@ -611,7 +611,7 @@ function merge_static_data(gpu_filename, cpu_filename, save_folder)
     generate_tex_opf(opf_results; filename = save_folder*replace(replace(gpu_filename, "_GPU" => ""), "saved_raw_data/" => ""))
 end
     
-function summary_table(filenames, max_wall_time, delta, save_prefix)
+function summary_table(filenames, max_wall_time, delta, save_prefix; mp=false)
     
     df = DataFrame(
         tol = Any[],
@@ -637,6 +637,15 @@ function summary_table(filenames, max_wall_time, delta, save_prefix)
     n_total = 0 
     for file in filenames
         results = CSV.read(file, DataFrame)
+
+        if mp
+            # find all *_termination columns
+            term_cols = filter(c -> endswith(c, "_termination"), names(results))
+
+            # keep rows that have at least one " " or "a" in termination columns
+            results = filter(row -> any(row[c] in (" ", "a") for c in term_cols), results)
+        end
+
         df_lifted_kkt = Dict(
             :small_count => 0, :small_time => Float64(1), :small_cvio => Float64(1),
             :med_count => 0, :med_time => Float64(1), :med_cvio => Float64(1),
@@ -703,8 +712,13 @@ function summary_table(filenames, max_wall_time, delta, save_prefix)
                     matched_solvers[solver_name][:total_count] += 1
                     matched_solvers[solver_name][time_label] = matched_solvers[solver_name][time_label]*(row[solver_name*"_soltime"] + delta)
                     matched_solvers[solver_name][:total_time] = matched_solvers[solver_name][:total_time]*(row[solver_name*"_soltime"] + delta)
-                    matched_solvers[solver_name][cvio_label] = matched_solvers[solver_name][cvio_label]*(row[solver_name*"_cvio"] + delta)
-                    matched_solvers[solver_name][:total_cvio] = matched_solvers[solver_name][:total_cvio]*(row[solver_name*"_cvio"] + delta)
+                    if typeof(row[solver_name*"_cvio"]) != Float64
+                        matched_solvers[solver_name][cvio_label] = matched_solvers[solver_name][cvio_label]*(parse(Float64, row[solver_name*"_cvio"]) + delta)
+                        matched_solvers[solver_name][:total_cvio] = matched_solvers[solver_name][:total_cvio]*(parse(Float64, row[solver_name*"_cvio"]) + delta)
+                    else
+                        matched_solvers[solver_name][cvio_label] = matched_solvers[solver_name][cvio_label]*(row[solver_name*"_cvio"] + delta)
+                        matched_solvers[solver_name][:total_cvio] = matched_solvers[solver_name][:total_cvio]*(row[solver_name*"_cvio"] + delta)
+                    end
                 else
                     matched_solvers[solver_name][time_label] = matched_solvers[solver_name][time_label]*(max_wall_time + delta)
                     matched_solvers[solver_name][:total_time] = matched_solvers[solver_name][:total_time]*(max_wall_time + delta)
@@ -993,7 +1007,7 @@ function solve_benchmark_cases(cases, tol, hardware; coords = "Polar", case_styl
         else
             model_cpu, ~ = opf_model("pglib_opf_case3_lmbd"; form=form)
         end
-        ~ = ipopt(model_cpu, tol = tol, max_iter = 3, dual_inf_tol=Float64(10000), constr_viol_tol=Float64(10000), compl_inf_tol=Float64(10000), bound_relax_factor = tol, linear_solver = "ma27")
+        ~ = ipopt(model_cpu, tol = tol, max_iter = 3, dual_inf_tol=Float64(10000), constr_viol_tol=Float64(10000), compl_inf_tol=Float64(10000), linear_solver = "ma27")
         #~ = ipopt(model_cpu, tol = tol, max_iter = 3, dual_inf_tol=Float64(10000), constr_viol_tol=Float64(10000), compl_inf_tol=Float64(10000), bound_relax_factor = tol, linear_solver = "ma97")
         ~ = madnlp(model_cpu, tol = tol,
                 kkt_system=MadNLP.SparseCondensedKKTSystem, equality_treatment=MadNLP.RelaxEquality, 
@@ -1178,7 +1192,7 @@ function solve_benchmark_cases(cases, tol, hardware; coords = "Polar", case_styl
             push!(df_top, (m_cpu.meta.nvar, m_cpu.meta.ncon, case))
 
             result_ma27 = ipopt(m_cpu, tol = tol, max_wall_time=max_wall_time, dual_inf_tol=Float64(10000), 
-            constr_viol_tol=Float64(10000), compl_inf_tol=Float64(10000), bound_relax_factor = tol, linear_solver = "ma27",
+            constr_viol_tol=Float64(10000), compl_inf_tol=Float64(10000), linear_solver = "ma27",
              honor_original_bounds = "no", print_timing_statistics = "yes", output_file = "ipopt_output", max_iter=max_iter)
             it, tot, ad = ipopt_stats("ipopt_output")
             c = evaluate(m_cpu, result_ma27)

@@ -13,8 +13,9 @@ function scopf_model(
     uc_data = JSON.parsefile(uc_filename)
     data = GOC3Benchmark.get_data_from_file(filename)
     data_json = JSON.parsefile(filename)
-    sc_data, lengths = parse_sc_data(data, uc_data, data_json)
-    
+    sc_data, lengths, producers_first = parse_sc_data(data, uc_data, data_json)
+    @info "parsed data"
+        
     (L_J_xf, L_J_ln, L_J_ac, L_J_dc, L_J_br, L_J_cs,
     L_J_pr, L_J_cspr, L_J_sh, I, L_T, L_N_p, L_N_q, L_W_en_min_pr,
      L_W_en_min_cs, L_W_en_max_pr, L_W_en_max_cs, K) = lengths
@@ -191,8 +192,7 @@ function scopf_model(
     #4.1 Market surplus objective
     #constraint (6-9)
     #All objectives are negative so that we can minimize
-
-    #Removing all uc variables, which include z_on, z_su, z_sd, z_sus. Note that this means objective value from ExaModelsPower will not match the objective calculated for the full GOC3 model, even though we still are solving the same problem (with UC as constants)
+    
 
     if include_ctg
         o2 = objective(core, -z_t_ctg_min[t] for t in sc_data.periods)
@@ -469,10 +469,11 @@ function scopf_model(
     #c143 forces τ_jt_ln = 1. This is realized in c148-151
     c144 = constraint(core, φ_jt_xf[xf.j_xf, xf.t] - xf.phi_o for xf in sc_data.fpdarray)
     c145 = constraint(core, τ_jt_xf[xf.j_xf, xf.t] - xf.tau_o for xf in sc_data.fwrarray)
+    println(sc_data.vpdarray)
     c146 = constraint(core, φ_jt_xf[xf.j_xf, xf.t] for xf in sc_data.vpdarray;
-                lcon = [xf.phi_min for xf in sc_data.vpdarray], ucon = [xf.phi_max for xf in sc_data.vpdarray])
+                lcon = [xf.phi_min for xf in sc_data_array.vpdarray], ucon = [xf.phi_max for xf in sc_data_array.vpdarray])
     c147 = constraint(core, τ_jt_xf[xf.j_xf, xf.t] for xf in sc_data.vwrarray;
-                lcon = [xf.tau_min for xf in sc_data.vwrarray], ucon = [xf.tau_max for xf in sc_data.vwrarray])
+                lcon = [xf.tau_min for xf in sc_data_array.vwrarray], ucon = [xf.tau_max for xf in sc_data_array.vwrarray])
 
     #4.8.3 AC branch flows
     
