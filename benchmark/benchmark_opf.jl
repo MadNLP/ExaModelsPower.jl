@@ -966,7 +966,16 @@ function solve_benchmark_cases(cases, tol, hardware; coords = "Polar", case_styl
             model_gpu, ~ = opf_model("pglib_opf_case3_lmbd"; backend = CUDABackend(), form=form)
         end
         ~ = madnlp(model_gpu, tol = tol, max_iter = 3, disable_garbage_collector=false, dual_initialized=true)
-        ~ = MadNCL.madncl(model_gpu, tol = tol, max_iter = 3, disable_garbage_collector=false, dual_initialized=true, ncl_options = MadNCL.NCLOptions{Float64}(scaling_max_gradient=100, scaling = false))
+        ~ = MadNCL.madncl(model_gpu, tol = tol, max_iter = 3, disable_garbage_collector=false, dual_initialized=true, 
+                        kkt_system=MadNCL.K2rAuglagKKTSystem,
+                        linear_solver=MadNLPGPU.CUDSSSolver,
+                        cudss_pivot_epsilon=1e-12,
+                        ncl_options = MadNCL.NCLOptions{Float64}(
+                            scaling_max_gradient=100,
+                            feas_tol=tol,
+                            opt_tol=tol,
+                            scaling=true,
+                        ))
         ~ = madnlp(model_gpu, tol=tol, max_wall_time = max_wall_time, disable_garbage_collector=false, dual_initialized=true, linear_solver=MadNLPGPU.CUDSSSolver,
                                             cudss_algorithm=MadNLP.LDL,
                                             kkt_system=HybridKKT.HybridCondensedKKTSystem,
@@ -1152,8 +1161,13 @@ function solve_benchmark_cases(cases, tol, hardware; coords = "Polar", case_styl
                 end
 
                 try
-                    result_madncl = MadNCL.madncl(m_gpu, tol=tol, max_wall_time = max_wall_time, disable_garbage_collector=false, dual_initialized=true, ncl_options = MadNCL.NCLOptions{Float64}(scaling_max_gradient=100, feas_tol=tol, opt_tol=tol, scaling=false)
-                    , max_iter=max_iter)
+                    result_madncl = MadNCL.madncl(m_gpu, tol=tol, max_wall_time = max_wall_time, disable_garbage_collector=false, 
+                                                    dual_initialized=true, 
+                                                    kkt_system=MadNCL.K2rAuglagKKTSystem,
+                                                    linear_solver=MadNLPGPU.CUDSSSolver,
+                                                    cudss_pivot_epsilon=1e-12,
+                                                    ncl_options = MadNCL.NCLOptions{Float64}(scaling_max_gradient=100, feas_tol=tol, opt_tol=tol, scaling=true),
+                                                    max_iter=max_iter)
                     c = evaluate(m_gpu, result_madncl)
                     push!(df_madncl, (i, result_madncl.counters.k, result_madncl.counters.total_time, result_madncl.counters.init_time, result_madncl.counters.eval_function_time, 
                     result_madncl.counters.linear_solver_time, termination_code(result_madncl.status), result_madncl.objective, c))
