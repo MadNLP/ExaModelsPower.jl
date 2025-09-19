@@ -5,7 +5,7 @@
 # Some of the models in this portion of the tutorial involve using external files. While we provide the necessary code to access these additional files, you may view them __[here](https://github.com/mit-shin-group/multi-period-opf-data)__ as well.
 # We will start with the simplest way to model the MPOPF, which also does not require the user to have any data already downloaded. Instead, the user specifies a demand curve for the system. The demand curve is a vector of ratios from 0 to 1 which indicate the scaling of demand compared to the demand indicated by the static OPF file. In this model of the MPOPF, every consuming bus has the same scaling in power demand for each point in time. A corrective action ratio, which limits the ramp rate of generators, can also be inputted. It is set to 0.1 as a default. The adjustable coordinate system and backend that were present for the static OPF are also available for all MPOPF models.
 using ExaModelsPower, CUDA, MadNLP, MadNLPGPU, ExaModels
-model, vars, cons = mpopf_model(
+model, vars, cons, core = mpopf_model(
     "pglib_opf_case118_ieee.m", # static network data
     [.64, .60, .58, .56, .56, .58, .64, .76, .87, .95, .99, 1.0, .99, 1.0, 1.0,
     .97, .96, .96, .93, .92, .92, .93, .87, .72, .64], #Demand curve
@@ -37,7 +37,7 @@ end
 
 # Next, build the MPOPF model, providing the dynamic load data instead of a demand curve as input.
 #Run your model
-model, vars, cons = mpopf_model(
+model, vars, cons, core = mpopf_model(
     "pglib_opf_case30_ieee.m",  # static network data (assumed local or already handled)
     pd_file,                    # dynamic load data (Pd)
     qd_file;                    # dynamic load data (Qd)
@@ -63,7 +63,7 @@ if !isfile(stor_file)
 end
 
 # Generate the model with your modified datafile. If the datafile contains storage parameters, ExaModelsPower will automatically recognize it and include the additional necessary constraints. 
-model, vars, cons = mpopf_model(
+model, vars, cons, core = mpopf_model(
     stor_file, # static network data with storage parameters
     pd_file,                    # dynamic load data (Pd)
     qd_file;                    # dynamic load data (Qd)
@@ -80,7 +80,7 @@ function example_function(d, srating)
 end;
 
 # ExaModelsPower will automatically adjust the necessary constraints if one of the inputs provided is a function.
-model, vars, cons = mpopf_model(
+model, vars, cons, core = mpopf_model(
     stor_file, # static network data with storage parameters
     pd_file,                    # dynamic load data (Pd)
     qd_file,                    # dynamic load data (Qd)

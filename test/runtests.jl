@@ -81,11 +81,11 @@ function runtests()
             for (filename, case, test_function) in test_cases
                 data_pm = parse_pm(filename)
                 for (form_str, form, power_model, test_voltage) in static_forms
-                    m32, v32, c32 = opf_model(filename; T=Float32, backend = backend, form=form)
+                    m32, v32, c32, ~ = opf_model(filename; T=Float32, backend = backend, form=form)
                     result32 = madnlp(m32; print_level = MadNLP.ERROR)
                     va32, vm32, pg32, qg32, p32, q32 = v32
 
-                    m64, v64, c64 = opf_model(filename; T=Float64, backend = backend, form=form)
+                    m64, v64, c64, ~ = opf_model(filename; T=Float64, backend = backend, form=form)
                     result64 = madnlp(m64; print_level = MadNLP.ERROR)
                     va64, vm64, pg64, qg64, p64, q64 = v64
                     
@@ -111,18 +111,18 @@ function runtests()
                 for (filename, case, Pd_pregen, Qd_pregen, true_sol_curve, true_sol_pregen) in mp_test_cases
                     #Curve = [1, .9, .8, .95, 1]
 
-                    m32, v32, c32 = eval(mpopf_model)(filename, [1, .9, .8, .95, 1]; T = Float32, backend = backend, form = symbol)
+                    m32, v32, c32, ~ = eval(mpopf_model)(filename, [1, .9, .8, .95, 1]; T = Float32, backend = backend, form = symbol)
                     result32 = madnlp(m32; print_level = MadNLP.ERROR)
-                    m64, v64, c64 = eval(mpopf_model)(filename, [1, .9, .8, .95, 1]; T = Float64, backend = backend, form = symbol)
+                    m64, v64, c64, ~ = eval(mpopf_model)(filename, [1, .9, .8, .95, 1]; T = Float64, backend = backend, form = symbol)
                     result64 = madnlp(m64; print_level = MadNLP.ERROR)
                     @testset "$(case), MP, $(T), $(backend), curve, $(form_str)" begin
                         test_float32(m32, m64, result64, backend)
                         test_mp_case(result64, true_sol_curve)
                     end
                     #w function
-                    m32, v32, c32 = eval(mpopf_model)(filename, [1, .9, .8, .95, 1], example_func; T = Float32, backend = backend, form = symbol)
+                    m32, v32, c32, ~ = eval(mpopf_model)(filename, [1, .9, .8, .95, 1], example_func; T = Float32, backend = backend, form = symbol)
                     result32 = madnlp(m32; print_level = MadNLP.ERROR)
-                    m64, v64, c64 = eval(mpopf_model)(filename, [1, .9, .8, .95, 1], example_func; T = Float64, backend = backend, form = symbol)
+                    m64, v64, c64, ~ = eval(mpopf_model)(filename, [1, .9, .8, .95, 1], example_func; T = Float64, backend = backend, form = symbol)
                     result64 = madnlp(m64; print_level = MadNLP.ERROR)
                     @testset "$(case), MP, $(T), $(backend), curve, $(form_str), func" begin
                         test_float32(m32, m64, result64, backend)
@@ -131,18 +131,18 @@ function runtests()
                 
 
                     #Pregenerated Pd and Qd
-                    m32, v32, c32 = eval(mpopf_model)(filename, Pd_pregen, Qd_pregen; T = Float32, backend = backend, form = symbol)
+                    m32, v32, c32, ~ = eval(mpopf_model)(filename, Pd_pregen, Qd_pregen; T = Float32, backend = backend, form = symbol)
                     result32 = madnlp(m32; print_level = MadNLP.ERROR)
-                    m64, v64, c64 = eval(mpopf_model)(filename, Pd_pregen, Qd_pregen; T = Float64, backend = backend, form = symbol)
+                    m64, v64, c64, ~ = eval(mpopf_model)(filename, Pd_pregen, Qd_pregen; T = Float64, backend = backend, form = symbol)
                     result64 = madnlp(m64; print_level = MadNLP.ERROR)
                     @testset "$(case), MP, $(T), $(backend), pregen, $(form_str)" begin
                         test_float32(m32, m64, result64, backend)
                         test_mp_case(result64, true_sol_pregen)
                     end
                     #w function
-                    m32, v32, c32 = eval(mpopf_model)(filename, Pd_pregen, Qd_pregen, example_func; T = Float32, backend = backend, form = symbol)
+                    m32, v32, c32, ~ = eval(mpopf_model)(filename, Pd_pregen, Qd_pregen, example_func; T = Float32, backend = backend, form = symbol)
                     result32 = madnlp(m32; print_level = MadNLP.ERROR)
-                    m64, v64, c64 = eval(mpopf_model)(filename, Pd_pregen, Qd_pregen, example_func; T = Float64, backend = backend, form = symbol)
+                    m64, v64, c64, ~ = eval(mpopf_model)(filename, Pd_pregen, Qd_pregen, example_func; T = Float64, backend = backend, form = symbol)
                     result64 = madnlp(m64; print_level = MadNLP.ERROR)
                     @testset "$(case), MP, $(T), $(backend), pregen, $(form_str), func" begin
                         test_float32(m32, m64, result64, backend)
@@ -154,9 +154,9 @@ function runtests()
                 for (filename, case, Pd_pregen, Qd_pregen, true_sol_curve_stor, 
                     true_sol_curve_stor_func, true_sol_pregen_stor, true_sol_pregen_stor_func) in mp_stor_test_cases
                     
-                    m32, v32, c32 = eval(mpopf_model)(filename, [1, .9, .8, .95, 1]; T = Float32, backend = backend, form = symbol)
+                    m32, v32, c32, ~ = eval(mpopf_model)(filename, [1, .9, .8, .95, 1]; T = Float32, backend = backend, form = symbol)
                     result32 = madnlp(m32; print_level = MadNLP.ERROR)
-                    m64, v64, c64 = eval(mpopf_model)(filename, [1, .9, .8, .95, 1]; T = Float64, backend = backend, form = symbol)
+                    m64, v64, c64, ~ = eval(mpopf_model)(filename, [1, .9, .8, .95, 1]; T = Float64, backend = backend, form = symbol)
                     result64 = madnlp(m64; print_level = MadNLP.ERROR)
                     @testset "MP w storage, $(case), $(T), $(backend), curve, $(form_str)" begin
                         test_float32(m32, m64, result64, backend)
@@ -164,9 +164,9 @@ function runtests()
                     end
 
                     #With function
-                    m32, v32, c32 = eval(mpopf_model)(filename, [1, .9, .8, .95, 1], example_func; T = Float32, backend = backend, form = symbol)
+                    m32, v32, c32, ~ = eval(mpopf_model)(filename, [1, .9, .8, .95, 1], example_func; T = Float32, backend = backend, form = symbol)
                     result32 = madnlp(m32; print_level = MadNLP.ERROR)
-                    m64, v64, c64 = eval(mpopf_model)(filename, [1, .9, .8, .95, 1], example_func; T = Float64, backend = backend, form = symbol)
+                    m64, v64, c64, ~ = eval(mpopf_model)(filename, [1, .9, .8, .95, 1], example_func; T = Float64, backend = backend, form = symbol)
                     result64 = madnlp(m64; print_level = MadNLP.ERROR)
                     @testset "MP w storage, $(case), $(T), $(backend), curve, $(form_str), func" begin
                         test_float32(m32, m64, result64, backend)
@@ -174,9 +174,9 @@ function runtests()
                     end
 
                     #Pregenerated Pd and Qd
-                    m32, v32, c32 = eval(mpopf_model)(filename, Pd_pregen, Qd_pregen; T = Float32, backend = backend, form = symbol)
+                    m32, v32, c32, ~ = eval(mpopf_model)(filename, Pd_pregen, Qd_pregen; T = Float32, backend = backend, form = symbol)
                     result32 = madnlp(m32; print_level = MadNLP.ERROR)
-                    m64, v64, c64 = eval(mpopf_model)(filename, Pd_pregen, Qd_pregen; T = Float64, backend = backend, form = symbol)
+                    m64, v64, c64, ~ = eval(mpopf_model)(filename, Pd_pregen, Qd_pregen; T = Float64, backend = backend, form = symbol)
                     result64 = madnlp(m64; print_level = MadNLP.ERROR)
                     @testset "MP w storage, $(case), $(T), $(backend), pregen, $(form_str)" begin
                         test_float32(m32, m64, result64, backend)
@@ -184,9 +184,9 @@ function runtests()
                     end
 
                     #With function
-                    m32, v32, c32 = eval(mpopf_model)(filename, Pd_pregen, Qd_pregen, example_func; T = Float32, backend = backend, form = symbol)
+                    m32, v32, c32, ~ = eval(mpopf_model)(filename, Pd_pregen, Qd_pregen, example_func; T = Float32, backend = backend, form = symbol)
                     result32 = madnlp(m32; print_level = MadNLP.ERROR)
-                    m64, v64, c64 = eval(mpopf_model)(filename, Pd_pregen, Qd_pregen, example_func; T = Float64, backend = backend, form = symbol)
+                    m64, v64, c64, ~ = eval(mpopf_model)(filename, Pd_pregen, Qd_pregen, example_func; T = Float64, backend = backend, form = symbol)
                     result64 = madnlp(m64; print_level = MadNLP.ERROR)
                     @testset "MP w storage, $(case), $(T), $(backend), pregen, $(form_str), func" begin
                         test_float32(m32, m64, result64, backend)

@@ -85,7 +85,7 @@ function build_polar_opf(data; backend = nothing, T=Float64, kwargs...)
         c_to_thermal_limit = c_to_thermal_limit
     )
 
-    return model, vars, cons
+    return model, vars, cons, core
 end
 
 function build_rect_opf(data; backend = nothing, T=Float64, kwargs...)
@@ -177,13 +177,13 @@ function build_rect_opf(data; backend = nothing, T=Float64, kwargs...)
         c_voltage_magnitude = c_voltage_magnitude
     )
 
-    return model, vars, cons
+    return model, vars, cons, core
 end
 
 """
     opf_model(filename; backend, T, form)
 
-Return `ExaModel`, variables, and constraints for a static AC Optimal Power Flow (ACOPF) problem from the given file.
+Return `ExaModel`, variables, constraints, and ExaCore for a static AC Optimal Power Flow (ACOPF) problem from the given file.
 
 # Arguments
 - `filename::String`: Path to the data file.
@@ -197,6 +197,7 @@ A vector `(model, variables, constraints)`:
 - `model`: An `ExaModel` object.
 - `variables`: NamedTuple of model variables.
 - `constraints`: NamedTuple of model constraints.
+- `core`: An `ExaCore` object.
 """
 function opf_model(
     filename;

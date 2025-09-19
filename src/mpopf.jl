@@ -237,7 +237,7 @@ function build_mpopf(data, Nbus, N, form; backend = nothing, T = Float64, storag
     end
 
     model = ExaModel(core; kwargs...)
-    return model, vars, cons
+    return model, vars, cons, core
 end
 
 #different constraints used when a function is added to remove complementarity and make charge/discharge curve smooth
@@ -253,7 +253,7 @@ function build_mpopf(data, Nbus, N, discharge_func::Function, form; backend = no
     end
 
     model = ExaModel(core; kwargs...)
-    return model, vars, cons
+    return model, vars, cons, core
 end
 
 function build_mpopf_stor_main(core, data, N, Nbus, vars, cons, form)
@@ -387,7 +387,7 @@ Construct a multi-period AC optimal power flow (MPOPF) model using different for
 
 # Returns
 
-A vector `(model::ExaModel object, variables::NamedTuple of variables, constraints::NamedTuple of constraints)` representing the MPOPF model.
+A vector `(model::ExaModel object, variables::NamedTuple of variables, constraints::NamedTuple of constraints, core::ExaCore object)` representing the MPOPF model.
 
 # Method Variants
 

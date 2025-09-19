@@ -205,7 +205,7 @@ function parse_sc_data_static(data, producers_first)
 
         ], by = x -> x.j),
 
-        dc_branch = sort([
+        dc_branch = L_J_dc == 0 ? empty_data = Vector{@NamedTuple{j::Int, j_dc::Int, uid::String,pdc_max::Float64, qdc_fr_min::Float64, qdc_to_min::Float64, qdc_fr_max::Float64, qdc_to_max::Float64, to_bus::Int, fr_bus::Int}}() :  sort([
             begin
                 j = parse(Int, match(r"\d+", val["uid"]).match) + L_J_ac+1
                 j_dc = parse(Int, match(r"\d+", val["uid"]).match)+1

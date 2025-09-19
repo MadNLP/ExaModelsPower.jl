@@ -11,7 +11,7 @@ We will start with the simplest way to model the MPOPF, which also does not requ
 
 ````julia
 using ExaModelsPower, CUDA, MadNLP, MadNLPGPU, ExaModels
-model, vars, cons = mpopf_model(
+model, vars, cons, core = mpopf_model(
     "pglib_opf_case118_ieee.m", # static network data
     [.64, .60, .58, .56, .56, .58, .64, .76, .87, .95, .99, 1.0, .99, 1.0, 1.0,
     .97, .96, .96, .93, .92, .92, .93, .87, .72, .64], #Demand curve
@@ -53,7 +53,7 @@ Next, build the MPOPF model, providing the dynamic load data instead of a demand
 
 ````julia
 #Run your model
-model, vars, cons = mpopf_model(
+model, vars, cons, core = mpopf_model(
     "pglib_opf_case30_ieee.m",  # static network data (assumed local or already handled)
     pd_file,                    # dynamic load data (Pd)
     qd_file;                    # dynamic load data (Qd)
@@ -89,7 +89,7 @@ end
 Generate the model with your modified datafile. If the datafile contains storage parameters, ExaModelsPower will automatically recognize it and include the additional necessary constraints.
 
 ````julia
-model, vars, cons = mpopf_model(
+model, vars, cons, core = mpopf_model(
     stor_file, # static network data with storage parameters
     pd_file,                    # dynamic load data (Pd)
     qd_file;                    # dynamic load data (Qd)
@@ -115,7 +115,7 @@ end;
 ExaModelsPower will automatically adjust the necessary constraints if one of the inputs provided is a function.
 
 ````julia
-model, vars, cons = mpopf_model(
+model, vars, cons, core = mpopf_model(
     stor_file, # static network data with storage parameters
     pd_file,                    # dynamic load data (Pd)
     qd_file,                    # dynamic load data (Qd)

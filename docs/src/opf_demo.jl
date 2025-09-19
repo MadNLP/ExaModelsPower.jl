@@ -12,7 +12,7 @@ using MadNLP, MadNLPGPU #, NLPModelsIpopt
 using ExaModels
 
 # We will begin by constructing and solving a static OPF using the function opf_model. For the static OPF, the only input required is the filename for the OPF matpower file. The file does not need to be locally installed, and it will be automatically downloaded from __[power-grid-library](https://github.com/power-grid-lib/pglib-opf)__ if the file is not found in the user's data folder. If keywords are not specified, the numerical type will default to Float64, the backend will default to nothing (used on CPU) and the form will default to polar coordinates. 
-model, vars, cons = opf_model(
+model, vars, cons, core = opf_model(
     "pglib_opf_case118_ieee.m";
     backend = CUDABackend(),
     form = :polar,
@@ -30,7 +30,7 @@ solution(result, vars.vm)[1:10]
 result.objective
 
 # ExaModelsPower supports solving the OPF in either polar or rectangular coordinates.
-model, vars, cons = opf_model(
+model, vars, cons, core = opf_model(
     "pglib_opf_case118_ieee.m";
     form = :rect
 )

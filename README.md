@@ -13,7 +13,7 @@ ExaModelsPower.jl is an optimal power flow models using ExaModels.jl
 using ExaModelsPower, MadNLP, MadNLPGPU, CUDA, ExaModels, GOC3Benchmark, JSON
 
 
-model, vars, cons = opf_model(
+model, vars, cons, core = opf_model(
     "pglib_opf_case118_ieee.m";
     backend = CUDABackend(),
     form = :polar
@@ -53,7 +53,7 @@ result = madnlp(model; tol=1e-4)
 
 ### Multi-period optimal power flow
 ```julia
-model, vars, cons = mpopf_model(
+model, vars, cons, core = mpopf_model(
     "pglib_opf_case118_ieee.m", # static network data
     "/home/sshin/git/ExaModels_Multiperiod/data/case118_onehour_168.Pd", # dynamic load data
     "/home/sshin/git/ExaModels_Multiperiod/data/case118_onehour_168.Qd"; # dynamic load data
@@ -62,7 +62,7 @@ model, vars, cons = mpopf_model(
 result = madnlp(model; tol=1e-6)
 
 #Alternatively, input a vector to scale baseline demand to generate a demand curve
-model, vars, cons = mpopf_model(
+model, vars, cons, core = mpopf_model(
     "pglib_opf_case118_ieee.m", # static network data
     [.64, .60, .58, .56, .56, .58, .64, .76, .87, .95, .99, 1.0, .99, 1.0, 1.0,
     .97, .96, .96, .93, .92, .92, .93, .87, .72, .64], #Demand curve
@@ -72,7 +72,7 @@ model, vars, cons = mpopf_model(
 result = madnlp(model; tol=1e-6)
 
 #mpopf_model can also handle inputs with storage constraints
-model, vars, cons = mpopf_model(
+model, vars, cons, core = mpopf_model(
     "pglib_opf_case30_ieee_mod.m", # static network data with storage parameters
     "/home/sshin/git/ExaModels_Multiperiod/data/halfhour_30.Pd", # dynamic load data
     "/home/sshin/git/ExaModels_Multiperiod/data/halfhour_30.Qd"; # dynamic load data
@@ -81,11 +81,11 @@ model, vars, cons = mpopf_model(
 result = madnlp(model; tol=1e-6)
 
 #Alternatively, provide a smooth function for the charge/discharge efficiency to remove complementarity constraint
-function example_func(d, srating)
+function example_func(d, s_rating)
     return -((s_rating/2)^d)+1
 end
 
-model, vars, cons = mpopf_model(
+model, vars, cons, core = mpopf_model(
     "pglib_opf_case30_ieee_mod.m", # static network data
     "/home/sshin/git/ExaModels_Multiperiod/data/halfhour_30.Pd", # dynamic load data
     "/home/sshin/git/ExaModels_Multiperiod/data/halfhour_30.Qd"; # dynamic load data

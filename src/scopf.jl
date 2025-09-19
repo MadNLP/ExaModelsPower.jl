@@ -473,9 +473,9 @@ function scopf_model(
     c144 = constraint(core, φ_jt_xf[xf.j_xf, xf.t] - xf.phi_o for xf in sc_data.fpdarray)
     c145 = constraint(core, τ_jt_xf[xf.j_xf, xf.t] - xf.tau_o for xf in sc_data.fwrarray)
     c146 = constraint(core, φ_jt_xf[xf.j_xf, xf.t] for xf in sc_data.vpdarray;
-                lcon = [xf.phi_min for xf in sc_data.vpdarray], ucon = [xf.phi_max for xf in sc_data.vpdarray])
+                lcon = [xf.phi_min for xf in sc_data_array.vpdarray], ucon = [xf.phi_max for xf in sc_data_array.vpdarray])
     c147 = constraint(core, τ_jt_xf[xf.j_xf, xf.t] for xf in sc_data.vwrarray;
-                lcon = [xf.tau_min for xf in sc_data.vwrarray], ucon = [xf.tau_max for xf in sc_data.vwrarray])
+                lcon = [xf.tau_min for xf in sc_data_array.vwrarray], ucon = [xf.tau_max for xf in sc_data_array.vwrarray])
 
     #4.8.3 AC branch flows
     
