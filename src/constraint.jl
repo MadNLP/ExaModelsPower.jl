@@ -93,7 +93,7 @@ end
 function c_active_power_balance_demand_rect(b, vr, vim)
     return b.pd + b.gs * (vr^2 + vim^2)
 end
-nnn
+
 function c_reactive_power_balance_demand_rect(b, vr, vim)
     return b.qd - b.bs * (vr^2 + vim^2)
 end

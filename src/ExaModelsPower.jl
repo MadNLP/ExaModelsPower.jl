@@ -33,4 +33,4 @@ function __init__()
     end
 end
 
-end # module ExaModelsExamples
+end # module ExaModelsPower
