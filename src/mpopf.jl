@@ -1,5 +1,3 @@
-using DelimitedFiles
-
 function parse_mp_power_data(filename, N, corrective_action_ratio)
 
     data = parse_ac_power_data(filename)

@@ -1,12 +1,13 @@
 module ExaModelsPower
 
-import JLD2
-import Downloads
-import ExaModels: ExaCore, variable, constraint, ExaModel, objective, constraint!, convert_array, solution
-
+import ExaModels: ExaModels, ExaCore, variable, constraint, ExaModel, objective, constraint!, convert_array, solution
+using DelimitedFiles
+using ExaPowerIO
+using JSON
 
 include("parser.jl")
 include("opf.jl")
+include("goc3_parser.jl")
 include("scopf.jl")
 include("mpopf.jl")
 include("constraint.jl")

@@ -1,5 +1,3 @@
-using ExaPowerIO
- 
 convert_data(data::N, backend) where {names,N<:NamedTuple{names}} =
     NamedTuple{names}(convert_array(d, backend) for d in data)
 
@@ -7,11 +5,6 @@ function parse_ac_power_data(filename)
     _, f = splitdir(filename)
     name, _ = splitext(f)
 
-    if isfile(joinpath(TMPDIR, name) * ".jld2")
-        @info "Loading cached JLD2 file"
-        loaded = JLD2.load(joinpath(TMPDIR, name) * ".jld2")
-        return loaded["data"]
-    end
     @info "Loading matpower file"
 
     library = isfile(filename) ? nothing : :pglib
@@ -43,9 +36,6 @@ function parse_ac_power_data(filename)
         srating = isempty(data.storage) ? Vector{NamedTuple{(:i,), Tuple{Int64}}}() : [s.thermal_rating for s in data.storage],
         emax = isempty(data.storage) ? Vector{NamedTuple{(:i,), Tuple{Int64}}}() : [s.energy_rating for s in data.storage],
     )
-
-    @info "Saving JLD2 cache file"
-    JLD2.save(joinpath(TMPDIR, name * ".jld2"), "data", data)
 
     return data
 end

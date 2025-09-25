@@ -1,5 +1,3 @@
-using GOC3Benchmark, JSON, ExaModels
-
 function scopf_model(
     filename, uc_filename;
     backend = nothing,
@@ -11,7 +9,7 @@ function scopf_model(
 
 
     uc_data = JSON.parsefile(uc_filename)
-    data = GOC3Benchmark.get_data_from_file(filename)
+    data = get_data_from_file(filename)
     data_json = JSON.parsefile(filename)
     sc_data, lengths, producers_first = parse_sc_data(data, uc_data, data_json)
     @info "parsed data"
@@ -231,7 +229,7 @@ function scopf_model(
     if include_ctg
         if K>0
             c4 = constraint(core, z_t_ctg_min[ind.t] - z_tk_ctg[ind.t, ind.k] for ind in sc_data.tk_index; lcon = fill(-Inf, size(sc_data.tk_index)))
-            c5 = constraint(core, z_t_ctg_avg[t]*K for t in sc_data.periods)
+            c5 = constraint(core, z_t_ctg_avg[t]*K for t in sc_data.periods) 
             c5_a = constraint!(core, c5, ind.t => -z_tk_ctg[ind.t, ind.k] for ind in sc_data.tk_index)
         else
             c4 = constraint(core, z_t_ctg_min[t] for t in sc_data.periods)
