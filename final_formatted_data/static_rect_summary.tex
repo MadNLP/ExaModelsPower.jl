@@ -1,0 +1,21 @@
+\begin{center}
+\renewcommand{\arraystretch}{0.9}
+\begin{tabular}{|l|l|ccc|ccc|ccc|ccc|}
+\hline
+ & & \multicolumn{3}{c|}{\textbf{Small (16)}} & \multicolumn{3}{c|}{\textbf{Medium (16)}} & \multicolumn{3}{c|}{\textbf{Large (34)}} & \multicolumn{3}{c|}{\textbf{Total (66)}} \\
+ & & \textbf{Count} & \textbf{Time} & \textbf{Cvio} & \textbf{Count} & \textbf{Time} & \textbf{Cvio} & \textbf{Count} & \textbf{Time} & \textbf{Cvio} & \textbf{Count} & \textbf{Time} & \textbf{Cvio}\\
+\hline
+\multirow{5}{*}{\Large\textbf{$10^{-4}$}} & \textbf{MadNLP+LiftedKKT (GPU)} & \cellcolor{blue!15}16 & 0.17 & 7.322e-04 & \cellcolor{blue!15}16 & \cellcolor{blue!15}0.69 & 1.779e-03 & \cellcolor{blue!15}31 & \cellcolor{blue!15}8.25 & 1.911e-03 & \cellcolor{blue!15}63 & \cellcolor{blue!15}3.91 & 1.578e-03 \\
+ & \textbf{MadNLP+HybridKKT (GPU)} & \cellcolor{blue!15}16 & 0.19 & \cellcolor{blue!15}1.307e-06 & 14 & 8.59 & 2.143e-06 & 23 & 39.99 & \cellcolor{blue!15}1.210e-07 & 53 & 16.75 & \cellcolor{blue!15}1.013e-06 \\
+ & \textbf{MadNCL (GPU)} & 15 & 3.55 & 1.569e-05 & 15 & 4.73 & 5.400e-03 & 25 & 32.69 & 1.762e-03 & 55 & 14.97 & 2.278e-03 \\
+ & \textbf{Ipopt+Ma27 (CPU)} & \cellcolor{blue!15}16 & \cellcolor{blue!15}0.04 & 1.742e-06 & \cellcolor{blue!15}16 & 0.89 & 8.221e-06 & 30 & 22.63 & 6.518e-06 & 62 & 8.79 & 5.725e-06 \\
+ & \textbf{MadNLP+Ma86 (CPU)} & \cellcolor{blue!15}16 & 0.1 & 2.273e-06 & \cellcolor{blue!15}16 & 3.04 & \cellcolor{blue!15}3.935e-07 & 29 & 36.69 & 1.430e-06 & 61 & 13.65 & 1.379e-06 \\
+\hline
+\multirow{5}{*}{\Large\textbf{$10^{-8}$}} & \textbf{MadNLP+LiftedKKT (GPU)} & \cellcolor{blue!15}16 & 0.35 & 7.274e-08 & 15 & 4.58 & 1.783e-07 & 28 & \cellcolor{blue!15}18.66 & 1.806e-07 & 59 & \cellcolor{blue!15}9.01 & 1.507e-07 \\
+ & \textbf{MadNLP+HybridKKT (GPU)} & \cellcolor{blue!15}16 & 0.23 & 6.908e-08 & 14 & 9.61 & 1.807e-07 & 21 & 58.76 & 1.974e-07 & 51 & 21.97 & 1.525e-07 \\
+ & \textbf{MadNCL (GPU)} & 15 & 3.63 & \cellcolor{blue!15}6.425e-08 & 15 & 5.3 & \cellcolor{blue!15}1.733e-07 & 24 & 39.62 & \cellcolor{blue!15}1.767e-07 & 54 & 17.27 & \cellcolor{blue!15}1.445e-07 \\
+ & \textbf{Ipopt+Ma27 (CPU)} & \cellcolor{blue!15}16 & \cellcolor{blue!15}0.05 & 6.870e-08 & \cellcolor{blue!15}16 & \cellcolor{blue!15}1.04 & 1.765e-07 & \cellcolor{blue!15}30 & 24.0 & 1.918e-07 & \cellcolor{blue!15}62 & 9.26 & 1.561e-07 \\
+ & \textbf{MadNLP+Ma86 (CPU)} & \cellcolor{blue!15}16 & 0.14 & 7.219e-08 & \cellcolor{blue!15}16 & 4.21 & 1.772e-07 & 29 & 42.2 & 1.843e-07 & 61 & 15.59 & 1.530e-07 \\
+\hline
+\end{tabular}
+\end{center}

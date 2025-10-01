@@ -1,0 +1,9 @@
+5×14 DataFrame
+ Row │ tol     solver                  small_count  small_time  small_cvio  med_count  med_time  med_cvio  large_count  large_time  large_cvio    total_count  total_time  total_cvio
+     │ Any     Any                     Int64        Float64     Float64     Int64      Float64   Float64   Int64        Float64     Float64       Int64        Float64     Float64
+─────┼──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+   1 │ 0.0001  MadNLP+Ma86 (CPU)                 0        -9.0        -9.0          0      -9.0      -9.0            1    15667.5    4.72789e-8             1    15667.5    4.72789e-8
+   2 │ 0.0001  Ipopt+Ma27 (CPU)                  0        -9.0        -9.0          0      -9.0      -9.0            1    18689.3    1.95364e-7             1    18689.3    1.95364e-7
+   3 │ 0.0001  MadNLP+HybridKKT (GPU)            0        -9.0        -9.0          0      -9.0      -9.0            1    10758.4    7.74466e-9             1    10758.4    7.74466e-9
+   4 │ 0.0001  MadNLP+LiftedKKT (GPU)            0        -9.0        -9.0          0      -9.0      -9.0            4     5294.44   0.000716676            4     5294.44   0.000716676
+   5 │ 0.0001  MadNCL (GPU)                      0        -9.0        -9.0          0      -9.0      -9.0            0    30000.0   -9.0                    0    30000.0   -9.0

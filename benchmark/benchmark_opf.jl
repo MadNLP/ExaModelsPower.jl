@@ -158,16 +158,49 @@ end
 
 
 
-function generate_tex_opf(opf_results::Dict; filename="benchmark_results_opf.tex")
+function generate_tex_opf(opf_results::Dict; filename="benchmark_results_opf.tex", filtered=false)
 
-    df_top = opf_results[:top]
-    df_lifted_kkt = opf_results[:lifted_kkt]
-    df_hybrid_kkt = opf_results[:hybrid_kkt]
-    df_madncl = opf_results[:madncl]
-    df_ma27 = opf_results[:ma27]
-    df_ma86 = opf_results[:ma86]
-    #df_ma97 = opf_results[:ma97]
-    
+    if filtered
+        # grab the dataframes
+        df_top        = opf_results[:top]
+        df_lifted_kkt = opf_results[:lifted_kkt]
+        df_hybrid_kkt = opf_results[:hybrid_kkt]
+        df_madncl     = opf_results[:madncl]
+        df_ma27       = opf_results[:ma27]
+        df_ma86       = opf_results[:ma86]
+
+        # helper: a termination is "allowed" if it equals " " or "a"
+        is_allowed = t -> !ismissing(t) && (t == " " || t == "a")
+
+        min_n = nrow(df_top)
+
+        # consider only first min_n rows; keep row i if ANY solver has an allowed termination
+        solvers = (df_lifted_kkt, df_hybrid_kkt, df_madncl, df_ma27, df_ma86)
+        keep = BitVector(undef, min_n)
+        for i in 1:min_n
+            keep[i] = any(df -> is_allowed(df[!, :termination][i]), solvers)
+        end
+        idxs = findall(keep)  # indices to keep (within 1:min_n)
+
+        # apply the same row indices to all six frames (this removes the rows where all 5 solvers were bad)
+        df_top        = df_top[idxs, :]
+        df_lifted_kkt = df_lifted_kkt[idxs, :]
+        df_hybrid_kkt = df_hybrid_kkt[idxs, :]
+        df_madncl     = df_madncl[idxs, :]
+        df_ma27       = df_ma27[idxs, :]
+        df_ma86       = df_ma86[idxs, :]
+
+        filename = replace(filename, r"\.csv$" => "_filtered.csv")
+    else
+        df_top = opf_results[:top]
+        df_lifted_kkt = opf_results[:lifted_kkt]
+        df_hybrid_kkt = opf_results[:hybrid_kkt]
+        df_madncl = opf_results[:madncl]
+        df_ma27 = opf_results[:ma27]
+        df_ma86 = opf_results[:ma86]
+        
+
+    end
 
     methods = ["MadNLP+LiftedKKT (GPU)", "MadNLP+HybridKKT (GPU)", "MadNCL (GPU)",
             "Ipopt+Ma27 (CPU)","Ipopt+Ma86 (CPU)",]#"Ipopt+Ma97 (CPU)"]
@@ -378,7 +411,7 @@ function generate_tex_opf(opf_results::Dict; filename="benchmark_results_opf.tex
     p = plot(
         xlabel = "nvar", ylabel = "Speedup vs. Ma27",
         xscale = :log10, yscale = :log10,
-        legend = :topleft, title = "Speedup vs. Problem Size",
+        legend = :topleft, title = "",
         markerstrokewidth = 0
     )
 
@@ -413,7 +446,7 @@ function save_opf_results(opf_results, path)
     CSV.write(path, all_dfs)
 end
 
-function merge_static_data(gpu_filename, cpu_filename, save_folder)
+function merge_static_data(gpu_filename, cpu_filename, save_folder; filtered = false)
     gpu_results = CSV.read(gpu_filename, DataFrame)
     cpu_results = CSV.read(cpu_filename, DataFrame)
 
@@ -437,7 +470,7 @@ function merge_static_data(gpu_filename, cpu_filename, save_folder)
                 :ma27 => df_ma27,
                 :ma86 => df_ma86)
     
-    generate_tex_opf(opf_results; filename = save_folder*replace(replace(gpu_filename, "_GPU" => ""), "saved_raw_data/" => ""))
+    generate_tex_opf(opf_results; filename = save_folder*replace(replace(gpu_filename, "_GPU" => ""), "saved_raw_data/" => ""), filtered=filtered)
 end
     
 function summary_table(filenames, max_wall_time, delta, save_prefix; mp=false)
@@ -464,6 +497,13 @@ function summary_table(filenames, max_wall_time, delta, save_prefix; mp=false)
     n_med = 0
     n_large = 0
     n_total = 0 
+
+    small_label = n_small
+    med_label = n_med
+    large_label = n_large
+    total_label = n_total
+
+    passed = false
     for file in filenames
         results = CSV.read(file, DataFrame)
 
@@ -512,17 +552,27 @@ function summary_table(filenames, max_wall_time, delta, save_prefix; mp=false)
                     "Ipopt+Ma27 (CPU)" => df_ma27,
                     "MadNLP+Ma86 (CPU)" => df_ma86)
 
+        
         n_small = 0
         n_med = 0
         n_large = 0
         n_total = nrow(results)
+
+        if mp
+            small_cutoff = 50000
+            med_cutoff = 500000
+        else
+            small_cutoff = 2000
+            med_cutoff = 20000
+        end
+
         for row in eachrow(results)
-            if row["nvars"] < 2000
+            if row["nvars"] < small_cutoff
                 count_label = :small_count
                 time_label = :small_time
                 cvio_label = :small_cvio
                 n_small += 1
-            elseif row["nvars"] < 20000
+            elseif row["nvars"] < med_cutoff
                 count_label = :med_count
                 time_label = :med_time
                 cvio_label = :med_cvio
@@ -583,6 +633,28 @@ function summary_table(filenames, max_wall_time, delta, save_prefix; mp=false)
             ))
 
         end
+
+        if !passed
+            passed = true
+            small_label = n_small
+            med_label = n_med
+            large_label = n_large
+            total_label = n
+        else
+            if small_label != n_small
+                small_label = string(small_label)*"/"*string(n_small)
+            end
+            if med_label != n_med
+                med_label = string(med_label)*"/"*string(n_med)
+            end
+            if large_label != n_large
+                large_label = string(large_label)*"/"*string(n_large)
+            end
+            if total_label != n
+                total_label = string(total_label)*"/"*string(n)
+            end
+            
+        end
         
     end
     
@@ -601,7 +673,7 @@ function summary_table(filenames, max_wall_time, delta, save_prefix; mp=false)
 \\renewcommand{\\arraystretch}{0.9}
 \\begin{tabular}{|l|l|ccc|ccc|ccc|ccc|}
 \\hline
- & & \\multicolumn{3}{c|}{\\textbf{Small ($(n_small))}} & \\multicolumn{3}{c|}{\\textbf{Medium ($(n_med))}} & \\multicolumn{3}{c|}{\\textbf{Large ($(n_large))}} & \\multicolumn{3}{c|}{\\textbf{Total ($(n_total))}} \\\\
+ & & \\multicolumn{3}{c|}{\\textbf{Small ($(small_label))}} & \\multicolumn{3}{c|}{\\textbf{Medium ($(med_label))}} & \\multicolumn{3}{c|}{\\textbf{Large ($(large_label))}} & \\multicolumn{3}{c|}{\\textbf{Total ($(total_label))}} \\\\
  & & \\textbf{Count} & \\textbf{Time} & \\textbf{Cvio} & \\textbf{Count} & \\textbf{Time} & \\textbf{Cvio} & \\textbf{Count} & \\textbf{Time} & \\textbf{Cvio} & \\textbf{Count} & \\textbf{Time} & \\textbf{Cvio}\\\\
 \\hline
 """
@@ -707,7 +779,9 @@ end
              
 
 function solve_benchmark_cases(cases, tol, hardware; coords = "Polar", case_style = "default", curve = [.64, .60, .58, .56, .56, .58, .64, .76, .87, .95, .99, 1.0, .99, 1.0, 1.0,
-    .97, .96, .96, .93, .92, .92, .93, .87, .72, .64], mp = false, storage = false, sc = false, corrective_action_ratio = 0.25, include_ctg = true)
+    .97, .96, .96, .93, .92, .92, .93, .87, .72, .64], mp = false, storage = false, sc = false, corrective_action_ratio = 0.25, include_ctg = true, storage_complementarity_constraint = false)
+
+
 
     max_wall_time = Float64(900)
     max_iter = Int64(3000)
@@ -718,6 +792,9 @@ function solve_benchmark_cases(cases, tol, hardware; coords = "Polar", case_styl
 
     if storage 
         csv_filename = "saved_raw_data/benchmark_results_mpopf_stor_" *hardware *"_" * case_style * "_tol_" * replace(@sprintf("%.0e", 1 / tol), r"\+0?" => "") * "_" * coords * ".csv"
+        if storage_complementarity_constraint
+            csv_filename = "saved_raw_data/benchmark_results_mpopf_stor_cc_" *hardware *"_" * case_style * "_tol_" * replace(@sprintf("%.0e", 1 / tol), r"\+0?" => "") * "_" * coords * ".csv"
+        end
     elseif mp
         csv_filename = "saved_raw_data/benchmark_results_mpopf_" *hardware *"_" * case_style * "_tol_" * replace(@sprintf("%.0e", 1 / tol), r"\+0?" => "") * "_" * coords * ".csv"
     elseif sc
@@ -784,7 +861,7 @@ function solve_benchmark_cases(cases, tol, hardware; coords = "Polar", case_styl
     #Compile time on smallest case
     if hardware == "GPU"
         if storage
-            model_gpu, ~ = mpopf_model("pglib_opf_case3_lmbd_storage", curve; backend = CUDABackend(), form=form, corrective_action_ratio = corrective_action_ratio)
+            model_gpu, ~ = mpopf_model("pglib_opf_case3_lmbd_storage", curve; backend = CUDABackend(), form=form, corrective_action_ratio = corrective_action_ratio, storage_complementarity_constraint = storage_complementarity_constraint)
         elseif mp
             model_gpu, ~ = mpopf_model("pglib_opf_case3_lmbd", curve; backend = CUDABackend(), form=form, corrective_action_ratio = corrective_action_ratio)
         elseif sc
@@ -835,7 +912,7 @@ function solve_benchmark_cases(cases, tol, hardware; coords = "Polar", case_styl
         
     elseif hardware == "CPU"
         if storage
-            model_cpu, ~ = mpopf_model("pglib_opf_case3_lmbd_storage", curve; form=form, corrective_action_ratio = corrective_action_ratio)
+            model_cpu, ~ = mpopf_model("pglib_opf_case3_lmbd_storage", curve; form=form, corrective_action_ratio = corrective_action_ratio, storage_complementarity_constraint = storage_complementarity_constraint)
         elseif mp
             model_cpu, ~ = mpopf_model("pglib_opf_case3_lmbd", curve; form=form, corrective_action_ratio = corrective_action_ratio)
         elseif sc
@@ -877,6 +954,7 @@ function solve_benchmark_cases(cases, tol, hardware; coords = "Polar", case_styl
     println("Already have $(length(existing_cases)) cases stored.")
     
 
+    println(opf_model)
     for (i, case) in enumerate(cases)
         println(case)
 
@@ -914,7 +992,7 @@ function solve_benchmark_cases(cases, tol, hardware; coords = "Polar", case_styl
             #GPU 
             let
                 if storage || mp
-                    m_gpu, v_gpu, c_gpu = mpopf_model(case, curve; backend = CUDABackend(), form=form, corrective_action_ratio = corrective_action_ratio)  
+                    m_gpu, v_gpu, c_gpu = mpopf_model(case, curve; backend = CUDABackend(), form=form, corrective_action_ratio = corrective_action_ratio, storage_complementarity_constraint = storage_complementarity_constraint)  
                 elseif sc
                     m_gpu, v_gpu, c_gpu = scopf_model(problem_case, uc_case; backend = CUDABackend(), include_ctg = include_ctg)   
                 else 
@@ -944,7 +1022,7 @@ function solve_benchmark_cases(cases, tol, hardware; coords = "Polar", case_styl
 
             let 
                 if storage || mp
-                    m_gpu, v_gpu, c_gpu = mpopf_model(case, curve; backend = CUDABackend(), form=form, corrective_action_ratio = corrective_action_ratio)  
+                    m_gpu, v_gpu, c_gpu = mpopf_model(case, curve; backend = CUDABackend(), form=form, corrective_action_ratio = corrective_action_ratio, storage_complementarity_constraint = storage_complementarity_constraint)  
                 elseif sc
                     m_gpu, v_gpu, c_gpu = scopf_model(problem_case, uc_case; backend = CUDABackend(), include_ctg = include_ctg)   
                 else 
@@ -982,7 +1060,7 @@ function solve_benchmark_cases(cases, tol, hardware; coords = "Polar", case_styl
 
             let
                 if storage || mp
-                    m_gpu, v_gpu, c_gpu = mpopf_model(case, curve; backend = CUDABackend(), form=form, corrective_action_ratio = corrective_action_ratio)  
+                    m_gpu, v_gpu, c_gpu = mpopf_model(case, curve; backend = CUDABackend(), form=form, corrective_action_ratio = corrective_action_ratio, storage_complementarity_constraint = storage_complementarity_constraint)  
                 elseif sc
                     m_gpu, v_gpu, c_gpu = scopf_model(problem_case, uc_case; backend = CUDABackend(), include_ctg = include_ctg)   
                 else 
@@ -1026,7 +1104,7 @@ function solve_benchmark_cases(cases, tol, hardware; coords = "Polar", case_styl
         elseif hardware == "CPU"
             #CPU
             if storage || mp
-                m_cpu, v_cpu, c_cpu = mpopf_model(case, curve; form=form, corrective_action_ratio = corrective_action_ratio)  
+                m_cpu, v_cpu, c_cpu = mpopf_model(case, curve; form=form, corrective_action_ratio = corrective_action_ratio, storage_complementarity_constraint = storage_complementarity_constraint)
             elseif sc
                 m_cpu, v_cpu, c_cpu = scopf_model(problem_case, uc_case; include_ctg = include_ctg)
             else 
