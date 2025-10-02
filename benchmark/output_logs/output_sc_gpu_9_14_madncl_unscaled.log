@@ -1,0 +1,4 @@
+[info | PowerModels]: Suppressing information and warning messages for the rest of this session.  Use the Memento package for more fine-grained control of logging.
+
+[384196] signal (15): Terminated
+in expression starting at /home/sanjayjo/ExaModelsPower.jl/benchmarking/benchmark/run_sc_gpu.jl:4

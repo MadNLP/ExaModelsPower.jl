@@ -1,0 +1,9 @@
+[info | PowerModels]: Suppressing information and warning messages for the rest of this session.  Use the Memento package for more fine-grained control of logging.
+
+[366547] signal (11.1): Segmentation fault
+in expression starting at /home/sanjayjo/ExaModelsPower.jl/benchmarking/benchmark/test_ma27.jl:16
+malloc(): unaligned tcache chunk detected
+
+[366547] signal (6.-6): Aborted
+in expression starting at /home/sanjayjo/ExaModelsPower.jl/benchmarking/benchmark/test_ma27.jl:16
+malloc(): smallbin double linked list corrupted

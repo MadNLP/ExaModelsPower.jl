@@ -1,0 +1,14 @@
+[info | PowerModels]: Suppressing information and warning messages for the rest of this session.  Use the Memento package for more fine-grained control of logging.
+ERROR: LoadError: CUDA initialization failed: CUDA error (code 100, CUDA_ERROR_NO_DEVICE)
+Stacktrace:
+ [1] error(s::String)
+   @ Base ./error.jl:35
+ [2] functional
+   @ ~/.julia/packages/CUDA/ja0IX/src/initialization.jl:24 [inlined]
+ [3] task_local_state!()
+   @ CUDA ~/.julia/packages/CUDA/ja0IX/lib/cudadrv/state.jl:77
+ [4] device()
+   @ CUDA ~/.julia/packages/CUDA/ja0IX/lib/cudadrv/state.jl:189
+ [5] top-level scope
+   @ ~/ExaModelsPower.jl/benchmarking/benchmark/run_sc_cpu.jl:2
+in expression starting at /home/sanjayjo/ExaModelsPower.jl/benchmarking/benchmark/run_sc_cpu.jl:2
