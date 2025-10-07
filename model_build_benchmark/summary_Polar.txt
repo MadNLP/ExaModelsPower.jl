@@ -1,0 +1,7 @@
+3×2 DataFrame
+ Row │ platform         Time
+     │ Any              Any
+─────┼─────────────────────────────
+   1 │ PowerModels-CPU  0.00282224
+   2 │ ExaModels-CPU    0.00304986
+   3 │ ExaModels-GPU    0.00549569
