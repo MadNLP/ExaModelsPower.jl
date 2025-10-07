@@ -11,10 +11,10 @@ ExaPowerIO = "14903efe-9500-4d7f-a589-7ab7e15da6de"
 [compat]
 JSON = "0.21"
 ExaModels = "0.9"
-ExaPowerIO = "0.2"
+ExaPowerIO = "0.3"
 MadNLP = "0.8"
 MadNLPGPU = "0.7"
-CUDA = "5 - 5.8.2"
+CUDA = "5"
 
 [extras]
 CUDA = "052768ef-5323-5732-b1bb-66c8b64840ba"
