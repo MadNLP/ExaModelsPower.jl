@@ -350,11 +350,14 @@ function add_smooth_cons(core, data, N, vars, cons, discharge_func)
 
     c_discharge_thermal_limit = constraint(core, c_discharge_limit_smooth(pstd[s.i, t]) for (s, t) in data.storarray; lcon = -repeat(data.srating, 1, N), ucon = repeat(data.srating, 1, N))
 
+    c_charge_limit = constraint(core, pstd[s.i, t] for (s, t) in data.storarray; lcon = -repeat(data.pcmax, 1, N), ucon = fill(Inf, size(data.storarray)))
+
     cons = (;cons...,
                 c_active_storage_power = c_active_storage_power,
                 c_storage_state = c_storage_state,
                 c_storage_state_init = c_storage_state_init,
-                c_discharge_thermal_limit = c_discharge_thermal_limit)
+                c_discharge_thermal_limit = c_discharge_thermal_limit,
+                c_charge_limit = c_charge_limit)
 
     return vars, cons
 end
