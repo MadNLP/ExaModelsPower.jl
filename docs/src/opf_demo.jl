@@ -24,7 +24,7 @@ model
 result = madnlp(model; tol=1e-6)
 
 # Once a solution has been generated, the values of any of the variables in the model can be unpacked using the vars NamedTuple.
-solution(result, vars.vm)[1:10]
+Array(solution(result, vars.vm))[1:10]
 
 # Result also stores the objective value.
 result.objective
