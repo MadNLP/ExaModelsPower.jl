@@ -17,7 +17,7 @@ jobs:
       labels: cuda
     strategy:
       matrix:
-        julia-version: ['1']
+        julia-version: ['1.11']
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4

@@ -67,7 +67,7 @@ result = madnlp(model; tol=1e-6)
 Once a solution has been generated, the values of any of the variables in the model can be unpacked using the vars NamedTuple.
 
 ````julia
-Array(solution(result, vars.vm))[1:10]
+solution(result, vars.vm)[1:10]
 ````
 
 ````
