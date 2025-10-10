@@ -1,4 +1,4 @@
-function scopf_model(
+function goc3_model(
     filename, uc_filename;
     backend = nothing,
     T = Float64,
