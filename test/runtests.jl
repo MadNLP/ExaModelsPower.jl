@@ -57,7 +57,7 @@ end
 
 function sc_tests(filename)
     uc_filename = "$filename.pop_solution.json"
-    model, sc_data_array, vars, lengths = ExaModelsPower.scopf_model(filename, uc_filename; backend=CUDABackend())
+    model, sc_data_array, vars, lengths = ExaModelsPower.goc3_model(filename, uc_filename; backend=CUDABackend())
     @info "built model"
     result = madnlp(model; print_level = MadNLP.ERROR, tol=8e-3, linear_solver=MadNLPGPU.CUDSSSolver)
     JLD2.save("result.jld2", "solution", result, "vars", vars, "lens", lens)
