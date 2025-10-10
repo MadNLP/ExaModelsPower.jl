@@ -6,6 +6,7 @@ CUDA = "052768ef-5323-5732-b1bb-66c8b64840ba"
 Literate = "98b081ad-f1c9-55d3-8b20-4c87d4299306"
 MadNLP = "2621e9c9-9eb4-46b1-8089-e8c72242dfb6"
 MadNLPGPU = "d72a61cc-809d-412f-99be-fd81f4b8a598"
+ExaModelsPower = "2fff4b78-0b6c-428d-bac8-85ccea8c4bdf"
 
 [compat]
 CUDA = "5"
