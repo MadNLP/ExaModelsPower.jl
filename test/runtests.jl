@@ -220,7 +220,7 @@ function runtests()
                 end
             end
             @testset "GOC3, $(T), $(backend)" begin
-                sc_tests("../data/C3EN00073D1_scenario_303")
+                sc_tests("../data/C3E4N00073D1_scenario_303", backend, T)
             end
 
             @testset "User callback, $(T), $(backend)" begin
