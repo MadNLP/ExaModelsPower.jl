@@ -1,8 +1,8 @@
-function dummy_extension(x, core, vars, cons)
+function dummy_extension(core, vars, cons)
     return vars, cons
 end
 
-function build_polar_opf(data, user_callback, callback_data; backend = nothing, T=Float64, kwargs...)
+function build_polar_opf(data, user_callback; backend = nothing, T=Float64, kwargs...)
     core = ExaCore(T; backend = backend)
 
     va = variable(core, length(data.bus);)
@@ -87,13 +87,13 @@ function build_polar_opf(data, user_callback, callback_data; backend = nothing, 
         c_to_thermal_limit = c_to_thermal_limit
     )
 
-    vars, cons = user_callback(callback_data, core, vars, cons)
+    vars, cons = user_callback(core, vars, cons)
     model =ExaModel(core; kwargs...)
 
     return model, vars, cons
 end
 
-function build_rect_opf(data, user_callback, callback_data; backend = nothing, T=Float64, kwargs...)
+function build_rect_opf(data, user_callback; backend = nothing, T=Float64, kwargs...)
     core = ExaCore(T; backend = backend)
 
     vr = variable(core, length(data.bus), start = fill!(similar(data.bus, Float64), 1.0))
@@ -182,7 +182,7 @@ function build_rect_opf(data, user_callback, callback_data; backend = nothing, T
         c_voltage_magnitude = c_voltage_magnitude
     )
 
-    vars, cons = user_callback(callback_data, core, vars, cons)
+    vars, cons = user_callback(core, vars, cons)
     model = ExaModel(core; kwargs...)
 
     return model, vars, cons
@@ -199,7 +199,6 @@ Return `ExaModel`, variables, and constraints for a static AC Optimal Power Flow
 - `T`: The numeric type to use (default is `Float64`).
 - `form`: Voltage representation, either `:polar` or `:rect`. Default is `:polar`.
 - `user_callback`: User function that extends the model
-- `callback_data`: User data for the callback function
 - `kwargs...`: Additional keyword arguments passed to the model builder.
 
 # Returns
@@ -214,7 +213,6 @@ function opf_model(
     T = Float64,
     form = :polar,
     user_callback = dummy_extension,
-    callback_data = nothing,
     kwargs...,
 )
 
@@ -222,9 +220,9 @@ function opf_model(
     data = convert_data(data, backend)
 
     if form == :polar
-        return build_polar_opf(data, user_callback, callback_data, backend = backend, T=T, kwargs...)
+        return build_polar_opf(data, user_callback, backend = backend, T=T, kwargs...)
     elseif form == :rect
-        return build_rect_opf(data, user_callback, callback_data, backend = backend, T=T, kwargs...)
+        return build_rect_opf(data, user_callback, backend = backend, T=T, kwargs...)
     else
         error("Invalid coordinate symbol - valid options are :polar or :rect")
     end

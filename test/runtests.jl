@@ -55,13 +55,38 @@ function example_func(d, srating)
     return d + 20/srating*d^2
 end
 
-function sc_tests(filename)
-    uc_filename = "$filename.pop_solution.json"
-    model, sc_data_array, vars, lengths = ExaModelsPower.goc3_model(filename, uc_filename; backend=CUDABackend())
-    @info "built model"
-    result = madnlp(model; print_level = MadNLP.ERROR, tol=8e-3, linear_solver=MadNLPGPU.CUDSSSolver)
-    JLD2.save("result.jld2", "solution", result, "vars", vars, "lens", lens)
-    ExaModelsPower.save_go3_solution(uc_filename, "solution_go3", result, vars, lengths)
+untimed_elec_data = [
+(i = 1, bus = 1, cost = -50);
+(i = 2, bus = 2, cost = -20)
+]
+Ntime = 3
+Nbus = 2
+elec_data = [(;b..., t = t) for b in untimed_elec_data, t in 1:Ntime]
+elec_min = [0, 0]
+elec_max = [50, 50]
+elec_scale = 5
+elec_curve = [1, .9, .95]
+
+function add_electrolyzers(core, vars, cons)
+    p_elec = variable(core, size(elec_data, 1),
+    size(elec_data, 2); lvar = elec_min, uvar = elec_max)
+    o2 = objective(core,
+    e.cost*p_elec[e.i, e.t] for e in elec_data)
+    c_elec_power_balance = constraint!(core,
+    cons.c_active_power_balance,
+    e.bus + Nbus*(e.t-1) => p_elec[e.i, e.t]
+    for e in elec_data)
+    c_elec_ramp = constraint(core,
+    p_elec[e.i, e.t] - p_elec[e.i, e.t - 1]
+    for e in elec_data[:, 2:Ntime];
+    lcon = fill!(similar(elec_data, Float64,
+    length(elec_data)), -elec_scale),
+    ucon = fill!(similar(elec_data, Float64,
+    length(elec_data)), elec_scale))
+    vars = (;vars..., p_elec=p_elec)
+    cons = (;cons..., c_elec_ramp=c_elec_ramp, 
+    c_elec_ramp_init=c_elec_ramp_init)
+    return vars, cons
 end
 
 PowerModels.silence()
@@ -194,6 +219,22 @@ function runtests()
                     end
                 end
             end
+            @testset "GOC3, $(T), $(backend)" begin
+                sc_tests("../data/C3EN00073D1_scenario_303")
+            end
+
+            @testset "User callback, $(T), $(backend)" begin
+                model, vars, cons = mpopf_model(
+                    "pglib_opf_case3_lmbd.m", elec_curve;
+                    user_callback = add_electrolyzers, T=T, backend=backend)
+            end
+
+            @testset "User callback, $(T), $(backend), func" begin
+                model, vars, cons = mpopf_model(
+                    "pglib_opf_case3_lmbd.m", elec_curve, example_func;
+                    user_callback = add_electrolyzers, T=T, backend=backend)
+            end
+
         end
     end
 end
