@@ -222,9 +222,9 @@ function opf_model(
     data = convert_data(data, backend)
 
     if form == :polar
-        return build_polar_opf(data, backend = backend, T=T, kwargs...)
+        return build_polar_opf(data, user_callback, callback_data, backend = backend, T=T, kwargs...)
     elseif form == :rect
-        return build_rect_opf(data, backend = backend, T=T, kwargs...)
+        return build_rect_opf(data, user_callback, callback_data, backend = backend, T=T, kwargs...)
     else
         error("Invalid coordinate symbol - valid options are :polar or :rect")
     end
