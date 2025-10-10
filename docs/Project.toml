@@ -9,8 +9,8 @@ MadNLPGPU = "d72a61cc-809d-412f-99be-fd81f4b8a598"
 ExaModelsPower = "2fff4b78-0b6c-428d-bac8-85ccea8c4bdf"
 
 [compat]
-CUDA = "5 - 5.8.2"
-ExaModels = "0.9.1"
+CUDA = "5"
+ExaModels = "0.9"
 
 [sources]
 ExaModelsPower = {path = ".."}	
