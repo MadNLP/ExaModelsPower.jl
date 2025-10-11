@@ -84,8 +84,7 @@ function add_electrolyzers(core, vars, cons)
     ucon = fill!(similar(elec_data, Float64,
     length(elec_data)), elec_scale))
     vars = (;vars..., p_elec=p_elec)
-    cons = (;cons..., c_elec_ramp=c_elec_ramp, 
-    c_elec_ramp_init=c_elec_ramp_init)
+    cons = (;cons..., c_elec_ramp=c_elec_ramp)
     return vars, cons
 end
 
@@ -225,13 +224,13 @@ function runtests()
 
             @testset "User callback, $(T), $(backend)" begin
                 model, vars, cons = mpopf_model(
-                    "pglib_opf_case3_lmbd.m", elec_curve;
+                    "../data/pglib_opf_case3_lmbd.m", elec_curve;
                     user_callback = add_electrolyzers, T=T, backend=backend)
             end
 
             @testset "User callback, $(T), $(backend), func" begin
                 model, vars, cons = mpopf_model(
-                    "pglib_opf_case3_lmbd.m", elec_curve, example_func;
+                    "../pglib_opf_case3_lmbd.m", elec_curve, example_func;
                     user_callback = add_electrolyzers, T=T, backend=backend)
             end
 
