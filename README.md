@@ -30,21 +30,21 @@ result = madnlp(model; tol=1e-6)
 #the other input data to generate a structure of named tuples which can then interface with 
 #ExaModels to generate the full model. We do not make any relaxations or decompositions for this problem
 
-model, sc_data, vars, lengths = scopf_model(
+model, sc_data, vars, lengths = goc3_model(
     "data/C3E4N00073D1_scenario_303.json", "data/C3E4N00073D1_scenario_303_solution.json"; 
     backend = CUDABackend()
 )
 result = madnlp(model; tol=1e-4)
 
 #Solution from GPU can be used to warm start a CPU solution or vice versa
-model_cpu, sc_data, vars, lengths = scopf_model(
+model_cpu, sc_data, vars, lengths = goc3_model(
     "data/C3E4N00073D1_scenario_303.json", "data/C3E4N00073D1_scenario_303_solution.json"; 
     result_set = [result, vars]
 )
 result_cpu = ipopt(model_cpu; tol=1e-8)
 
 #Additionally, the SC problem can be evaluated without contingencies
-model, sc_data, vars, lengths = scopf_model(
+model, sc_data, vars, lengths = goc3_model(
     "data/C3E4N00073D1_scenario_303.json", "data/C3E4N00073D1_scenario_303_solution.json"; 
     backend = CUDABackend(), include_ctg = false
 )

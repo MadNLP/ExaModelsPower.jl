@@ -1,4 +1,8 @@
-function build_polar_opf(data; backend = nothing, T=Float64, kwargs...)
+function dummy_extension(core, vars, cons)
+    return vars, cons
+end
+
+function build_polar_opf(data, user_callback; backend = nothing, T=Float64, kwargs...)
     core = ExaCore(T; backend = backend)
 
     va = variable(core, length(data.bus);)
@@ -60,8 +64,6 @@ function build_polar_opf(data; backend = nothing, T=Float64, kwargs...)
         for b in data.branch;
         lcon = fill!(similar(data.branch, Float64, length(data.branch)), -Inf),
     )
-
-    model =ExaModel(core; kwargs...)
     
     vars = (
             va = va,
@@ -85,10 +87,13 @@ function build_polar_opf(data; backend = nothing, T=Float64, kwargs...)
         c_to_thermal_limit = c_to_thermal_limit
     )
 
+    vars, cons = user_callback(core, vars, cons)
+    model =ExaModel(core; kwargs...)
+
     return model, vars, cons
 end
 
-function build_rect_opf(data; backend = nothing, T=Float64, kwargs...)
+function build_rect_opf(data, user_callback; backend = nothing, T=Float64, kwargs...)
     core = ExaCore(T; backend = backend)
 
     vr = variable(core, length(data.bus), start = fill!(similar(data.bus, Float64), 1.0))
@@ -152,7 +157,7 @@ function build_rect_opf(data; backend = nothing, T=Float64, kwargs...)
         ucon = data.vmax.^2
     ) 
     
-    model = ExaModel(core; kwargs...)
+    
     
     vars = (
         vr = vr,
@@ -177,6 +182,9 @@ function build_rect_opf(data; backend = nothing, T=Float64, kwargs...)
         c_voltage_magnitude = c_voltage_magnitude
     )
 
+    vars, cons = user_callback(core, vars, cons)
+    model = ExaModel(core; kwargs...)
+
     return model, vars, cons
 end
 
@@ -190,6 +198,7 @@ Return `ExaModel`, variables, and constraints for a static AC Optimal Power Flow
 - `backend`: The solver backend to use. Default if nothing.
 - `T`: The numeric type to use (default is `Float64`).
 - `form`: Voltage representation, either `:polar` or `:rect`. Default is `:polar`.
+- `user_callback`: User function that extends the model
 - `kwargs...`: Additional keyword arguments passed to the model builder.
 
 # Returns
@@ -203,6 +212,7 @@ function opf_model(
     backend = nothing,
     T = Float64,
     form = :polar,
+    user_callback = dummy_extension,
     kwargs...,
 )
 
@@ -210,9 +220,9 @@ function opf_model(
     data = convert_data(data, backend)
 
     if form == :polar
-        return build_polar_opf(data, backend = backend, T=T, kwargs...)
+        return build_polar_opf(data, user_callback, backend = backend, T=T, kwargs...)
     elseif form == :rect
-        return build_rect_opf(data, backend = backend, T=T, kwargs...)
+        return build_rect_opf(data, user_callback, backend = backend, T=T, kwargs...)
     else
         error("Invalid coordinate symbol - valid options are :polar or :rect")
     end

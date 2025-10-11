@@ -65,3 +65,10 @@ function test_mp_case(result, true_sol)
     @test result.status == MadNLP.SOLVE_SUCCEEDED || result.status == MadNLP.SOLVED_TO_ACCEPTABLE_LEVEL
     @test isapprox(result.objective, true_sol, rtol = result.options.tol*100)
 end
+
+function sc_tests(filename, backend, T)
+    uc_filename = filename*"_solution.json"
+    filename = filename*".json"
+    model, sc_data_array, vars, lengths = ExaModelsPower.goc3_model(filename, uc_filename; backend=backend, T=T)
+    result = madnlp(model; max_iter=5, tol=1e-2)
+end

@@ -223,7 +223,7 @@ function add_mpopf_cons(core, data, N, Nbus, vars, cons, form)
     return vars, cons
 end
 
-function build_mpopf(data, Nbus, N, form; backend = nothing, T = Float64, storage_complementarity_constraint = false, kwargs...)
+function build_mpopf(data, Nbus, N, form, user_callback; backend = nothing, T = Float64, storage_complementarity_constraint = false, kwargs...)
     core = ExaCore(T; backend = backend)
 
     vars, cons = build_base_mpopf(core, data, N)
@@ -234,12 +234,13 @@ function build_mpopf(data, Nbus, N, form; backend = nothing, T = Float64, storag
         vars, cons = add_piecewise_cons(core, data, N, vars, cons, storage_complementarity_constraint)
     end
 
+    vars, cons = user_callback(core, vars, cons)
     model = ExaModel(core; kwargs...)
     return model, vars, cons
 end
 
 #different constraints used when a function is added to remove complementarity and make charge/discharge curve smooth
-function build_mpopf(data, Nbus, N, discharge_func::Function, form; backend = nothing, T = Float64, kwargs...)
+function build_mpopf(data, Nbus, N, discharge_func::Function, form, user_callback; backend = nothing, T = Float64, kwargs...)
     core = ExaCore(T; backend = backend)
 
     vars, cons = build_base_mpopf(core, data, N)
@@ -250,6 +251,7 @@ function build_mpopf(data, Nbus, N, discharge_func::Function, form; backend = no
         vars, cons = add_smooth_cons(core, data, N, vars, cons, discharge_func)
     end
 
+    vars, cons = user_callback(core, vars, cons)
     model = ExaModel(core; kwargs...)
     return model, vars, cons
 end
@@ -348,11 +350,14 @@ function add_smooth_cons(core, data, N, vars, cons, discharge_func)
 
     c_discharge_thermal_limit = constraint(core, c_discharge_limit_smooth(pstd[s.i, t]) for (s, t) in data.storarray; lcon = -repeat(data.srating, 1, N), ucon = repeat(data.srating, 1, N))
 
+    c_charge_limit = constraint(core, pstd[s.i, t] for (s, t) in data.storarray; lcon = -repeat(data.pcmax, 1, N), ucon = fill(Inf, size(data.storarray)))
+
     cons = (;cons...,
                 c_active_storage_power = c_active_storage_power,
                 c_storage_state = c_storage_state,
                 c_storage_state_init = c_storage_state_init,
-                c_discharge_thermal_limit = c_discharge_thermal_limit)
+                c_discharge_thermal_limit = c_discharge_thermal_limit,
+                c_charge_limit = c_charge_limit)
 
     return vars, cons
 end
@@ -381,6 +386,7 @@ Construct a multi-period AC optimal power flow (MPOPF) model using different for
 - `form::Symbol`: Power flow formulation, either `:polar` or `:rect` (default = `:polar`).
 - `T::Type`: Floating-point type for numeric variables (default = `Float64`).
 - `storage_complementarity_constraint::Bool`: Whether to enforce complementarity for storage (only for some methods, default = false).
+- `user_callback`: User function that extends the model
 - `kwargs...`: Additional arguments passed to the solver or builder.
 
 # Returns
@@ -404,6 +410,7 @@ function mpopf_model(
     form = :polar,
     T = Float64,
     storage_complementarity_constraint = false,
+    user_callback = dummy_extension,
     kwargs...,
 )
 
@@ -416,7 +423,7 @@ function mpopf_model(
     if form != :polar && form != :rect
         error("Invalid coordinate symbol - valid options are :polar or :rect")
     end
-    return build_mpopf(data, Nbus, N, form, backend = backend, T = T, storage_complementarity_constraint = storage_complementarity_constraint, kwargs...)
+    return build_mpopf(data, Nbus, N, form, user_callback, backend = backend, T = T, storage_complementarity_constraint = storage_complementarity_constraint, kwargs...)
 
 end
 
@@ -430,6 +437,7 @@ function mpopf_model(
     form = :polar,
     T = Float64,
     storage_complementarity_constraint = false,
+    user_callback = dummy_extension,
     kwargs...,
 )
 
@@ -442,7 +450,7 @@ function mpopf_model(
     if form != :polar && form != :rect
         error("Invalid coordinate symbol - valid options are :polar or :rect")
     end
-    return build_mpopf(data, Nbus, N, form, backend = backend, T = T, storage_complementarity_constraint = storage_complementarity_constraint, kwargs...)
+    return build_mpopf(data, Nbus, N, form, user_callback, backend = backend, T = T, storage_complementarity_constraint = storage_complementarity_constraint, kwargs...)
 
 end
 
@@ -454,6 +462,7 @@ function mpopf_model(
     backend = nothing,
     form = :polar,
     T = Float64,
+    user_callback = dummy_extension,
     kwargs...,
 )
 
@@ -466,7 +475,7 @@ function mpopf_model(
     if form != :polar && form != :rect
         error("Invalid coordinate symbol - valid options are :polar or :rect")
     end
-    return build_mpopf(data, Nbus, N, discharge_func, form, backend = backend, T = T, kwargs...)
+    return build_mpopf(data, Nbus, N, discharge_func, form,user_callback, backend = backend, T = T, kwargs...)
 
 end
 
@@ -480,6 +489,7 @@ function mpopf_model(
     form = :polar,
     T = Float64,
     storage_complementarity_constraint = false,
+    user_callback = dummy_extension,
     kwargs...,
 )
 
@@ -493,6 +503,6 @@ function mpopf_model(
     if form != :polar && form != :rect
         error("Invalid coordinate symbol - valid options are :polar or :rect")
     end
-    return build_mpopf(data, Nbus, N, discharge_func, form, backend = backend, T = T, kwargs...)
+    return build_mpopf(data, Nbus, N, discharge_func, form,user_callback, backend = backend, T = T, kwargs...)
 end
 
