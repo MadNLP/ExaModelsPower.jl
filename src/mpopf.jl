@@ -234,8 +234,11 @@ function build_mpopf(data, Nbus, N, form, user_callback; backend = nothing, T = 
         vars, cons = add_piecewise_cons(core, data, N, vars, cons, storage_complementarity_constraint)
     end
 
-    vars, cons = user_callback(core, vars, cons)
-    model = ExaModel(core; kwargs...)
+    vars2, cons2 = user_callback(core, vars, cons)
+    model =ExaModel(core; kwargs...)
+
+    vars = vars(;vars..., vars2)
+    cons = cons(;cons..., cons2)
     return model, vars, cons
 end
 
@@ -251,8 +254,11 @@ function build_mpopf(data, Nbus, N, discharge_func::Function, form, user_callbac
         vars, cons = add_smooth_cons(core, data, N, vars, cons, discharge_func)
     end
 
-    vars, cons = user_callback(core, vars, cons)
-    model = ExaModel(core; kwargs...)
+    vars2, cons2 = user_callback(core, vars, cons)
+    model =ExaModel(core; kwargs...)
+
+    vars = vars(;vars..., vars2)
+    cons = cons(;cons..., cons2)
     return model, vars, cons
 end
 
