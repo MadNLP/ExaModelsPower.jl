@@ -224,7 +224,7 @@ function runtests()
 
             @testset "User callback, $(T), $(backend)" begin
                 model, vars, cons = mpopf_model(
-                    "../data/pglib_opf_case3_lmbd.m", elec_curve;
+                    "../data/pglib_opf_case3_lmbd_mod.m", elec_curve;
                     user_callback = add_electrolyzers, T=T, backend=backend)
             end
 
