@@ -30,21 +30,21 @@ result = madnlp(model; tol=1e-6)
 #the other input data to generate a structure of named tuples which can then interface with 
 #ExaModels to generate the full model. We do not make any relaxations or decompositions for this problem
 
-model, sc_data, vars, lengths = goc3_model(
+model, cons, vars, lengths, sc_data_array = goc3_model(
     "data/C3E4N00073D1_scenario_303.json", "data/C3E4N00073D1_scenario_303_solution.json"; 
     backend = CUDABackend()
 )
 result = madnlp(model; tol=1e-4)
 
 #Solution from GPU can be used to warm start a CPU solution or vice versa
-model_cpu, sc_data, vars, lengths = goc3_model(
+model, cons, vars, lengths, sc_data_array = goc3_model(
     "data/C3E4N00073D1_scenario_303.json", "data/C3E4N00073D1_scenario_303_solution.json"; 
     result_set = [result, vars]
 )
 result_cpu = ipopt(model_cpu; tol=1e-8)
 
 #Additionally, the SC problem can be evaluated without contingencies
-model, sc_data, vars, lengths = goc3_model(
+model, cons, vars, lengths, sc_data_array = goc3_model(
     "data/C3E4N00073D1_scenario_303.json", "data/C3E4N00073D1_scenario_303_solution.json"; 
     backend = CUDABackend(), include_ctg = false
 )
@@ -99,6 +99,39 @@ result = madnlp(model; tol=1e-6)
 #https://github.com/mit-shin-group/multi-period-opf-data
 ```
 
+### User extension modeling
+ExaModelsPower also supports the user arbitrarily extending any prebuilt models
+```julia
 
+curve = [1, .9, .95]
+# Create vector of NamedTuples elec\_data w/ device data
+untimed_elec_data = [(i = 1, bus = 1, cost = -5000), (i = 2, bus = 2, cost = -2000)]
+Ntime = 3; Nbus = 2
+elec_data = [(;b..., t = t) for b in untimed_elec_data, t in 1:Ntime]
+elec_min = zeros(size(elec_data)); elec_max = fill(50, size(elec_data)); elec_scale = Float64(10)
+
+# User-defined model modifications go here
+function add_electrolyzers(core, vars, cons)
+    # Add new variable to core
+    p_elec = variable(core, size(elec_data, 1), size(elec_data, 2); lvar = elec_min, uvar = elec_max)
+    
+    # Objectives are additive. Add secondary objective
+    o2 = objective(core, e.cost*p_elec[e.i, e.t] for e in elec_data)
+    
+    # Add electrolyzer load to power balance for each bus
+    c_elec_power_balance = constraint!(core, cons.c_active_power_balance, e.bus + Nbus*(e.t-1) => p_elec[e.i, e.t] for e in elec_data)
+    
+    # Ramping limit over time
+    c_elec_ramp = constraint(core, p_elec[e.i, e.t] - p_elec[e.i, e.t - 1] for e in elec_data[:, 2:Ntime]; lcon = fill(-elec_scale, size(elec_data[:, 2:Ntime])), ucon = fill(elec_scale, size(elec_data[:, 2:Ntime])))
+    
+    # Set initial electrolyzer power to 0
+    c_elec_ramp_init = constraint(core, p_elec[e.i, e.t] for e in elec_data[:, 1];)
+
+    # Return new variables and constraints to be tracked
+    return ((p_elec=p_elec,), (c_elec_ramp=c_elec_ramp, c_elec_ramp_init=c_elec_ramp_init))
+end
+# Generate model
+model, vars, cons = mpopf_model("pglib_opf_case3_lmbd.m", curve; user_callback = add_electrolyzers) # user_callback function added after initial mpopf model is constructed
+```
 
 

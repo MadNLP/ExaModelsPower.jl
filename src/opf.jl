@@ -188,8 +188,8 @@ function build_rect_opf(data, user_callback; backend = nothing, T=Float64, kwarg
     vars2, cons2 = user_callback(core, vars, cons)
     model =ExaModel(core; kwargs...)
 
-    vars = (;vars..., vars2)
-    cons = (;cons..., cons2)
+    vars = (;vars..., vars2...)
+    cons = (;cons..., cons2...)
 
     return model, vars, cons
 end

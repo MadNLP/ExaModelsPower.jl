@@ -237,8 +237,8 @@ function build_mpopf(data, Nbus, N, form, user_callback; backend = nothing, T = 
     vars2, cons2 = user_callback(core, vars, cons)
     model =ExaModel(core; kwargs...)
 
-    vars = (;vars..., vars2)
-    cons = (;cons..., cons2)
+    vars = (;vars..., vars2...)
+    cons = (;cons..., cons2...)
     return model, vars, cons
 end
 

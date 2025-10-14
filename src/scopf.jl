@@ -4,6 +4,7 @@ function goc3_model(
     T = Float64,
     include_ctg = true, #contingencies will be specified in input data
     result_set = [],
+    user_callback = dummy_extension,
     kwargs...
         )
 
@@ -241,10 +242,11 @@ function goc3_model(
     end
 
     #4.2.1 Bus power mismatch and penalized mismatch definitions
-    c_11 = constraint(core, p_it_plus[b.i, b.t] - p_it[b.i, b.t] for b in sc_data.busarray; ucon = fill(Inf, size(sc_data.busarray)))
-    c_12 = constraint(core, p_it_plus[b.i, b.t] + p_it[b.i, b.t] for b in sc_data.busarray; ucon = fill(Inf, size(sc_data.busarray)))
-    c_13 = constraint(core, q_it_plus[b.i, b.t] - q_it[b.i, b.t] for b in sc_data.busarray; ucon = fill(Inf, size(sc_data.busarray)))
-    c_14 = constraint(core, q_it_plus[b.i, b.t] + q_it[b.i, b.t] for b in sc_data.busarray; ucon = fill(Inf, size(sc_data.busarray)))
+    c11 = constraint(core, p_it_plus[b.i, b.t] - p_it[b.i, b.t] for b in sc_data.busarray; ucon = fill(Inf, size(sc_data.busarray)))
+    c12 = constraint(core, p_it_plus[b.i, b.t] + p_it[b.i, b.t] for b in sc_data.busarray; ucon = fill(Inf, size(sc_data.busarray)))
+    c13 = constraint(core, q_it_plus[b.i, b.t] - q_it[b.i, b.t] for b in sc_data.busarray; ucon = fill(Inf, size(sc_data.busarray)))
+    c14 = constraint(core, q_it_plus[b.i, b.t] + q_it[b.i, b.t] for b in sc_data.busarray; ucon = fill(Inf, size(sc_data.busarray)))
+    cons = (c11=c11, c12=c12, c13=c13, c14=c14)
     #4.2.2 Bus pwoer mismatch penalty
     c15 = constraint(core, z_it_p[b.i, b.t] - b.dt*sum(sc_data.c_p)*p_it_plus[b.i, b.t] for b in sc_data.busarray)
     c16 = constraint(core, z_it_q[b.i, b.t] - b.dt*sum(sc_data.c_q)*q_it_plus[b.i, b.t] for b in sc_data.busarray)
@@ -253,6 +255,7 @@ function goc3_model(
     c17_pr = constraint!(core, c17, pr.bus + I*(pr.t-1) => p_jt_pr[pr.j_pr, pr.t] for pr in sc_data.prarray)
     c17_cs = constraint!(core, c17, cs.bus + I*(cs.t-1) => -p_jt_cs[cs.j_cs, cs.t] for cs in sc_data.csarray)
     c17_sh = constraint!(core, c17, sh.bus + I*(sh.t-1) => -p_jt_sh[sh.j_sh, sh.t] for sh in sc_data.shuntarray)
+    
     
     #Reminder: fr and to split for ln, xf, and dc
     c17_fr_ln = constraint!(core, c17, ln.fr_bus + I*(ln.t-1) => -p_jt_fr_ln[ln.j_ln, ln.t] for ln in sc_data.aclbrancharray)
@@ -272,8 +275,8 @@ function goc3_model(
     c18_to_ln = constraint!(core, c18, ln.to_bus + I*(ln.t-1) => -q_jt_to_ln[ln.j_ln, ln.t] for ln in sc_data.aclbrancharray)
     c18_to_xf = constraint!(core, c18, xf.to_bus + I*(xf.t-1) => -q_jt_to_xf[xf.j_xf, xf.t] for xf in sc_data.acxbrancharray)
     c18_to_dc = constraint!(core, c18, dc.to_bus + I*(dc.t-1) => -q_jt_to_dc[dc.j_dc, dc.t] for dc in sc_data.dclinearray)
-
     
+    println("mid1")
     #4.3.2 Reserve shortfall penalties
     c28 = constraint(core, z_nt_rgu[n.n_p, n.t] - n.dt*n.c_rgu*p_nt_rgu_plus[n.n_p, n.t] for n in sc_data.preservearray)
     c29 = constraint(core, z_nt_rgd[n.n_p, n.t] - n.dt*n.c_rgd*p_nt_rgd_plus[n.n_p, n.t] for n in sc_data.preservearray)
@@ -283,7 +286,6 @@ function goc3_model(
     c33 = constraint(core, z_nt_rrd[n.n_p, n.t] - n.dt*n.c_rrd*p_nt_rrd_plus[n.n_p, n.t] for n in sc_data.preservearray)
     c34 = constraint(core, z_nt_qru[n.n_q, n.t] - n.dt*n.c_qru*q_nt_qru_plus[n.n_q, n.t] for n in sc_data.qreservearray)
     c35 = constraint(core, z_nt_qrd[n.n_q, n.t] - n.dt*n.c_qrd*q_nt_qrd_plus[n.n_q, n.t] for n in sc_data.qreservearray)
-
     
     #4.3.3 Reserve requirements
     c36 = constraint(core, p_nt_rgu_req[n.n_p, n.t]/n.σ_rgu for n in sc_data.preservearray)
@@ -367,6 +369,7 @@ function goc3_model(
     c79_pr = constraint(core, z_w_en_min_pr[w.w_en_min_pr_ind] - sum(sc_data.c_e)*e_w_plus_min_pr[w.w_en_min_pr_ind] for w in sc_data.W_en_min_pr)
     c79_cs = constraint(core, z_w_en_min_cs[w.w_en_min_cs_ind] - sum(sc_data.c_e)*e_w_plus_min_cs[w.w_en_min_cs_ind] for w in sc_data.W_en_min_cs)
 
+    println("mid2")
     #4.6.5 Device reserve costs
     #p_jt split into pr and cs
     c90_pr = constraint(core, z_jt_rgu_pr[pr.j_pr, pr.t] - pr.dt*pr.c_rgu*p_jt_rgu_pr[pr.j_pr, pr.t] for pr in sc_data.prarray)
@@ -445,6 +448,7 @@ function goc3_model(
     c131_cs = constraint(core, z_jt_en_cs[cs.j_cs, cs.t]/cs.dt for cs in sc_data.csarray)
     c131_cs_a = constraint!(core, c131_cs, cs.j_cs + L_J_cs*(cs.t-1) => -cs.c_en*p_jtm_cs[cs.flat_k] for cs in sc_data.p_jtm_flattened_cs)
 
+    println("mid3")
     #4.7 Shunt devices
     c132 = constraint(core, p_jt_sh[sh.j_sh, sh.t] - g_jt_sh[sh.j_sh, sh.t]*v_it[sh.bus, sh.t]^2 for sh in sc_data.shuntarray)
     c133 = constraint(core, q_jt_sh[sh.j_sh, sh.t] + b_jt_sh[sh.j_sh, sh.t]*v_it[sh.bus, sh.t]^2 for sh in sc_data.shuntarray)
@@ -477,7 +481,6 @@ function goc3_model(
 
     #4.8.3 AC branch flows
     
-    
     c148_ln = constraint(core, -p_jt_fr_ln[ln.j_ln, ln.t] + ln.u_on*((ln.g_sr+ln.g_fr)*v_it[ln.fr_bus, ln.t]^2 + (-ln.g_sr*cos(θ_it[ln.fr_bus, ln.t] - θ_it[ln.to_bus, ln.t])
      - ln.b_sr*sin(θ_it[ln.fr_bus, ln.t] - θ_it[ln.to_bus, ln.t]))*v_it[ln.fr_bus, ln.t]*v_it[ln.to_bus, ln.t]) for ln in sc_data.aclbrancharray)
     c148_xf = constraint(core, -p_jt_fr_xf[xf.j_xf, xf.t] + xf.u_on*((xf.g_sr+xf.g_fr)*v_it[xf.fr_bus, xf.t]^2/(τ_jt_xf[xf.j_xf, xf.t]^2) + (-xf.g_sr*cos(θ_it[xf.fr_bus, xf.t] - θ_it[xf.to_bus, xf.t] - φ_jt_xf[xf.j_xf, xf.t])
@@ -494,7 +497,6 @@ function goc3_model(
     + ln.g_sr*sin(θ_it[ln.fr_bus, ln.t] - θ_it[ln.to_bus, ln.t]))*v_it[ln.fr_bus, ln.t]*v_it[ln.to_bus, ln.t]) for ln in sc_data.aclbrancharray)
     c151_xf = constraint(core, -q_jt_to_xf[xf.j_xf, xf.t] + xf.u_on*((-xf.b_sr-xf.b_to-xf.b_ch/2)*v_it[xf.to_bus, xf.t]^2 + (xf.b_sr*cos(θ_it[xf.fr_bus, xf.t] - θ_it[xf.to_bus, xf.t] - φ_jt_xf[xf.j_xf, xf.t]) 
     + xf.g_sr*sin(θ_it[xf.fr_bus, xf.t] - θ_it[xf.to_bus, xf.t] - φ_jt_xf[xf.j_xf, xf.t]))*v_it[xf.fr_bus, xf.t]*v_it[xf.to_bus, xf.t]/τ_jt_xf[xf.j_xf, xf.t]) for xf in sc_data.acxbrancharray)
-    
 
     #4.8.4 DC lines
     c156 = constraint(core, p_jt_fr_dc[dc.j_dc, dc.t] + p_jt_to_dc[dc.j_dc, dc.t] for dc in sc_data.dclinearray)
@@ -535,10 +537,9 @@ function goc3_model(
         c163_sh = constraint!(core, c163, sh.bus + I*(sh.t-1) + I*L_T*(sh.k-1) => -p_jt_sh[sh.j_sh, sh.t] for sh in sc_data.k_shuntarray)
         c163_dc_fr = constraint!(core, c163, dc.fr_bus + I*(dc.t-1) + I*L_T*(dc.ctg-1) => -p_jt_fr_dc[dc.j_dc, dc.t] for dc in sc_data.jtk_dc_flattened)
         c163_dc_to = constraint!(core, c163, dc.to_bus + I*(dc.t-1) + I*L_T*(dc.ctg-1) => -p_jt_fr_dc[dc.j_dc, dc.t] for dc in sc_data.jtk_dc_flattened)
+        
     end
 
-
-    model = ExaModel(core; kwargs...)
 
     vars = (b_jt_sh = b_jt_sh,
             g_jt_sh = g_jt_sh,
@@ -657,6 +658,129 @@ function goc3_model(
             τ_jt_xf = τ_jt_xf,
             φ_jt_xf = φ_jt_xf)
 
+        cons = (
+            c11 = c11,
+            c12 = c12,
+            c13 = c13,
+            c14 = c14,
+            c15 = c15,
+            c16 = c16,
+            c17 = c17,
+            c18 = c18,
+            c28 = c28,
+            c29 = c29,
+            c30 = c30,
+            c31 = c31,
+            c32 = c32,
+            c33 = c33,
+            c34 = c34,
+            c35 = c35,
+            c36 = c36,
+            c37 = c37,
+            cmax38 = cmax38,
+            c38 = c38,
+            c39 = c39,
+            c40 = c40,
+            c41 = c41,
+            c42 = c42,
+            c43 = c43,
+            c44 = c44,
+            c45 = c45,
+            c46 = c46,
+            c47 = c47,
+            c68_pr = c68_pr,
+            c68_cs = c68_cs,
+            c69_pr = c69_pr,
+            c69_cs = c69_cs,
+            c70_pr = c70_pr,
+            c70_cs = c70_cs,
+            c71_pr = c71_pr,
+            c71_cs = c71_cs,
+            c72_pr = c72_pr,
+            c72_cs = c72_cs,
+            c73_pr = c73_pr,
+            c73_cs = c73_cs,
+            c74_pr = c74_pr,
+            c74_cs = c74_cs,
+            c75_pr = c75_pr,
+            c75_cs = c75_cs,
+            c76_pr = c76_pr,
+            c76_cs = c76_cs,
+            c78_pr = c78_pr,
+            c78_cs = c78_cs,
+            c79_pr = c79_pr,
+            c79_cs = c79_cs,
+            c94_pr = c94_pr,
+            c94_cs = c94_cs,
+            c95_pr = c95_pr,
+            c95_cs = c95_cs,
+            c96_pr = c96_pr,
+            c96_cs = c96_cs,
+            c97_pr = c97_pr,
+            c97_cs = c97_cs,
+            c98_pr = c98_pr,
+            c98_cs = c98_cs,
+            c99_pr = c99_pr,
+            c99_cs = c99_cs,
+            c100_pr = c100_pr,
+            c100_cs = c100_cs,
+            c101_pr = c101_pr,
+            c102_pr = c102_pr,
+            c102_cs = c102_cs,
+            c103_pr = c103_pr,
+            c104_pr = c104_pr,
+            c104_cs = c104_cs,
+            c105_cs = c105_cs,
+            c109 = c109,
+            c110 = c110,
+            c111 = c111,
+            c112 = c112,
+            c113 = c113,
+            c114 = c114,
+            c115 = c115,
+            c116 = c116,
+            c117 = c117,
+            c118 = c118,
+            c119 = c119,
+            c120 = c120,
+            c121 = c121,
+            c122 = c122,
+            c123 = c123,
+            c124 = c124,
+            c125 = c125,
+            c126 = c126,
+            c127 = c127,
+            c128 = c128,
+            c130_pr = c130_pr,
+            c130_cs = c130_cs,
+            c131_pr = c131_pr,
+            c131_cs = c131_cs,
+            c132 = c132,
+            c133 = c133,
+            c134 = c134,
+            c135 = c135,
+            c139_ln = c139_ln,
+            c139_xf = c139_xf,
+            c140_ln = c140_ln,
+            c140_xf = c140_xf,
+            c141_ln = c141_ln,
+            c141_xf = c141_xf,
+            c144 = c144,
+            c145 = c145,
+            c146 = c146,
+            c147 = c147,
+            c148_ln = c148_ln,
+            c148_xf = c148_xf,
+            c149_ln = c149_ln,
+            c149_xf = c149_xf,
+            c150_ln = c150_ln,
+            c150_xf = c150_xf,
+            c151_ln = c151_ln,
+            c151_xf = c151_xf,
+            c156 = c156
+        )
+
+        println("mid4")
         if include_ctg
             vars = (;vars...,
             s_jtk_plus_ln = s_jtk_plus_ln,
@@ -670,11 +794,30 @@ function goc3_model(
             z_tk_ctg = z_tk_ctg,
             z_t_ctg_min = z_t_ctg_min,
             z_t_ctg_avg = z_t_ctg_avg)
+            cons = (;cons...,
+                    c4=c4, 
+                    c5=c5, 
+                    c10=c10, 
+                    c158_ln=c158_ln, 
+                    c158_xf=c158_xf, 
+                    c159_ln=c159_ln, 
+                    c159_xf=c159_xf, 
+                    c160_ln=c160_ln, 
+                    c160_xf=c160_xf, 
+                    c161_ln=c161_ln, 
+                    c161_xf=c161_xf, 
+                    c162=c162, 
+                    c163=c163)
         end
 
+        vars2, cons2 = user_callback(core, vars, cons)
+        model =ExaModel(core; kwargs...)
+
+        vars = (;vars..., vars2...)
+        cons = (;cons..., cons2...)
    
     @info "built model"
-    return model, sc_data_array, vars, lengths
+    return model, cons, vars, lengths, sc_data_array
 
 end
 
