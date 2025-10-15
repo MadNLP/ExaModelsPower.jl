@@ -276,7 +276,6 @@ function goc3_model(
     c18_to_xf = constraint!(core, c18, xf.to_bus + I*(xf.t-1) => -q_jt_to_xf[xf.j_xf, xf.t] for xf in sc_data.acxbrancharray)
     c18_to_dc = constraint!(core, c18, dc.to_bus + I*(dc.t-1) => -q_jt_to_dc[dc.j_dc, dc.t] for dc in sc_data.dclinearray)
     
-    println("mid1")
     #4.3.2 Reserve shortfall penalties
     c28 = constraint(core, z_nt_rgu[n.n_p, n.t] - n.dt*n.c_rgu*p_nt_rgu_plus[n.n_p, n.t] for n in sc_data.preservearray)
     c29 = constraint(core, z_nt_rgd[n.n_p, n.t] - n.dt*n.c_rgd*p_nt_rgd_plus[n.n_p, n.t] for n in sc_data.preservearray)
@@ -369,7 +368,6 @@ function goc3_model(
     c79_pr = constraint(core, z_w_en_min_pr[w.w_en_min_pr_ind] - sum(sc_data.c_e)*e_w_plus_min_pr[w.w_en_min_pr_ind] for w in sc_data.W_en_min_pr)
     c79_cs = constraint(core, z_w_en_min_cs[w.w_en_min_cs_ind] - sum(sc_data.c_e)*e_w_plus_min_cs[w.w_en_min_cs_ind] for w in sc_data.W_en_min_cs)
 
-    println("mid2")
     #4.6.5 Device reserve costs
     #p_jt split into pr and cs
     c90_pr = constraint(core, z_jt_rgu_pr[pr.j_pr, pr.t] - pr.dt*pr.c_rgu*p_jt_rgu_pr[pr.j_pr, pr.t] for pr in sc_data.prarray)
@@ -448,7 +446,6 @@ function goc3_model(
     c131_cs = constraint(core, z_jt_en_cs[cs.j_cs, cs.t]/cs.dt for cs in sc_data.csarray)
     c131_cs_a = constraint!(core, c131_cs, cs.j_cs + L_J_cs*(cs.t-1) => -cs.c_en*p_jtm_cs[cs.flat_k] for cs in sc_data.p_jtm_flattened_cs)
 
-    println("mid3")
     #4.7 Shunt devices
     c132 = constraint(core, p_jt_sh[sh.j_sh, sh.t] - g_jt_sh[sh.j_sh, sh.t]*v_it[sh.bus, sh.t]^2 for sh in sc_data.shuntarray)
     c133 = constraint(core, q_jt_sh[sh.j_sh, sh.t] + b_jt_sh[sh.j_sh, sh.t]*v_it[sh.bus, sh.t]^2 for sh in sc_data.shuntarray)
@@ -780,7 +777,6 @@ function goc3_model(
             c156 = c156
         )
 
-        println("mid4")
         if include_ctg
             vars = (;vars...,
             s_jtk_plus_ln = s_jtk_plus_ln,
