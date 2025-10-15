@@ -83,9 +83,8 @@ function add_electrolyzers(core, vars, cons)
     length(elec_data)), -elec_scale),
     ucon = fill!(similar(elec_data, Float64,
     length(elec_data)), elec_scale))
-    vars = (p_elec=p_elec)
-    println(vars)
-    cons = (c_elec_ramp=c_elec_ramp)
+    vars = (p_elec=p_elec,)
+    cons = (c_elec_ramp=c_elec_ramp,)
     return vars, cons
 end
 
