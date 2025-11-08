@@ -134,4 +134,15 @@ end
 model, vars, cons = mpopf_model("pglib_opf_case3_lmbd.m", curve; user_callback = add_electrolyzers) # user_callback function added after initial mpopf model is constructed
 ```
 
+## Citing ExaModelsPower.jl
 
+If you use ExaModelsPower.jl in your research, we would greatly appreciate your citing it.
+
+```bibtex
+@misc{ExaModelsPower-2025,
+  title  = {{ExaModelsPower.jl: A GPU-Compatible Modeling Library for Nonlinear Power System Optimization}},
+  author = {Sanjay Johnson and Dirk Lauinger and Sungho Shin and François Pacaud},
+  year   = {2025},
+  url    = {https://arxiv.org/abs/2510.12897}, 
+}
+```
