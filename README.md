@@ -19,6 +19,14 @@ model, vars, cons = opf_model(
     form = :polar
 )
 result = madnlp(model; tol=1e-6)
+
+
+#Alternatively, solve using DC linearization
+model, vars, cons = dcopf_model(
+    "pglib_opf_case118_ieee.m";
+    backend = CUDABackend()
+)
+result = madnlp(model; tol=1e-6)
 ```
 
 ### Security-constrained optimal power flow
