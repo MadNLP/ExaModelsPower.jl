@@ -218,6 +218,23 @@ function runtests()
                     end
                 end
             end
+            # Test DCOPF
+            for (filename, case, _) in test_cases
+                @testset "$case, DCOPF, $backend" begin
+                    m32, v32, c32 = dcopf_model(filename; T=Float32, backend = backend)
+                    result32 = madnlp(m32; print_level = MadNLP.ERROR)
+
+                    m64, v64, c64 = dcopf_model(filename; T=Float64, backend = backend)
+                    result64 = madnlp(m64; print_level = MadNLP.ERROR)
+                    va64, pg64, pf64 = v64
+
+                    nlp_solver = JuMP.optimizer_with_attributes(Ipopt.Optimizer, "tol"=>Float64(result64.options.tol), "print_level"=>0)
+                    result_pm = solve_opf(filename, DCPPowerModel, nlp_solver)
+
+                    test_dcopf_case(result64, result_pm, pg64, pf64)
+                end
+            end
+
             @testset "GOC3, $(T), $(backend)" begin
                 sc_tests("../data/C3E4N00073D1_scenario_303", backend, T)
             end

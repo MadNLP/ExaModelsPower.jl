@@ -72,3 +72,14 @@ function sc_tests(filename, backend, T)
     model, cons, vars, lengths, sc_data_array = ExaModelsPower.goc3_model(filename, uc_filename; backend=backend, T=T)
     result = madnlp(model; max_iter=5, tol=1e-2)
 end
+
+function test_dcopf_case(result, result_pm, pg, pf)
+    @test result.status == MadNLP.SOLVE_SUCCEEDED || result.status == MadNLP.SOLVED_TO_ACCEPTABLE_LEVEL
+    @test isapprox(result.objective, result_pm["objective"], rtol = result.options.tol*100)
+    for i in 1:length(result_pm["solution"]["gen"])
+        @test isapprox(Array(solution(result, pg))[i], result_pm["solution"]["gen"][string(i)]["pg"], atol = result.options.tol*1000)
+    end
+    for i in 1:length(result_pm["solution"]["branch"])
+        @test isapprox(Array(solution(result, pf))[i], result_pm["solution"]["branch"][string(i)]["pf"], atol = result.options.tol*1000)
+    end
+end
