@@ -3,6 +3,7 @@ function dummy_extension(core, vars, cons)
 end
 
 function build_dcopf(data, user_callback; backend = nothing, T = Float64, core = nothing, kwargs...)
+
     core = isnothing(core) ? ExaCore(T; backend = backend) : core
     T, backend = typeof(core).parameters[1], core.backend
 
@@ -37,6 +38,7 @@ function build_dcopf(data, user_callback; backend = nothing, T = Float64, core =
     c_active_power_balance = constraint(
         core,
         c_active_power_balance_dc(b) for b in data.bus
+
     )
     constraint!(core, c_active_power_balance, g.bus => -pg[g.i] for g in data.gen)
     constraint!(core, c_active_power_balance, br.f_bus => pf[br.i] for br in data.branch)
@@ -84,10 +86,12 @@ A vector `(model, variables, constraints)`:
 - `variables`: NamedTuple of model variables.
 - `constraints`: NamedTuple of model constraints.
 """
+
 function dcopf_model(
     filename;
     backend = nothing,
     T = Float64,
+
     user_callback = dummy_extension,
     kwargs...,
 )
@@ -95,4 +99,5 @@ function dcopf_model(
     data = convert_data(data, backend)
 
     return build_dcopf(data, user_callback; backend = backend, T = T, kwargs...)
+
 end
