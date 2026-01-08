@@ -151,12 +151,13 @@ function c_comp(pstd, pstc)
 end
 
 # DCOPF
-function c_ohms_law_dcopf(br, pf, va_f, va_t, b_val)
+function c_ohms_law_dcopf(br, pf, va_f, va_t)
+    r2_x2 = br.br_r^2 + br.br_x^2
+    b_val = -br.br_x / r2_x2
     return -b_val * (va_f - va_t) - pf
 end
 
-function dcopf_branch_b(br)
-    r2_x2 = br.br_r^2 + br.br_x^2
-    b_val = -br.br_x / r2_x2
-    return b_val
+function c_active_power_balance_dc(b)
+    return b.pd + b.gs
 end
+
