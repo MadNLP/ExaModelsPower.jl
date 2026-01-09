@@ -195,7 +195,7 @@ function build_rect_opf(data, user_callback; backend = nothing, T=Float64, kwarg
 end
 
 """
-    opf_model(filename; backend, T, form)
+    ac_opf_model(filename; backend, T, form)
 
 Return `ExaModel`, variables, and constraints for a static AC Optimal Power Flow (ACOPF) problem from the given file.
 
@@ -213,7 +213,7 @@ A vector `(model, variables, constraints)`:
 - `variables`: NamedTuple of model variables.
 - `constraints`: NamedTuple of model constraints.
 """
-function opf_model(
+function ac_opf_model(
     filename;
     backend = nothing,
     T = Float64,

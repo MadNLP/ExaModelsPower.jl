@@ -13,7 +13,7 @@ ExaModelsPower.jl is an optimal power flow models using ExaModels.jl
 using ExaModelsPower, MadNLP, MadNLPGPU, CUDA, ExaModels, GOC3Benchmark, JSON
 
 
-model, vars, cons = opf_model(
+model, vars, cons = ac_opf_model(
     "pglib_opf_case118_ieee.m";
     backend = CUDABackend(),
     form = :polar

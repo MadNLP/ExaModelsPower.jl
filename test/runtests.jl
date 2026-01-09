@@ -105,11 +105,11 @@ function runtests()
             for (filename, case, test_function) in test_cases
                 data_pm = parse_pm(filename)
                 for (form_str, form, power_model, test_voltage) in static_forms
-                    m32, v32, c32 = opf_model(filename; T=Float32, backend = backend, form=form)
+                    m32, v32, c32 = ac_opf_model(filename; T=Float32, backend = backend, form=form)
                     result32 = madnlp(m32; print_level = MadNLP.ERROR)
                     va32, vm32, pg32, qg32, p32, q32 = v32
 
-                    m64, v64, c64 = opf_model(filename; T=Float64, backend = backend, form=form)
+                    m64, v64, c64 = ac_opf_model(filename; T=Float64, backend = backend, form=form)
                     result64 = madnlp(m64; print_level = MadNLP.ERROR)
                     va64, vm64, pg64, qg64, p64, q64 = v64
                     
