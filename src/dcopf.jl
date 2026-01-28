@@ -1,7 +1,3 @@
-function dummy_extension(core, vars, cons)
-    return (;), (;)
-end
-
 function build_dcopf(data, user_callback; backend = nothing, T = Float64, core = nothing, kwargs...)
 
     core = isnothing(core) ? ExaCore(T; backend = backend) : core
@@ -9,7 +5,7 @@ function build_dcopf(data, user_callback; backend = nothing, T = Float64, core =
 
     va = variable(core, length(data.bus))
     pg = variable(core, length(data.gen); lvar = data.pmin, uvar = data.pmax)
-    
+
 
     pf = variable(
         core,
@@ -21,7 +17,7 @@ function build_dcopf(data, user_callback; backend = nothing, T = Float64, core =
     o = objective(core, gen_cost(g, pg[g.i]) for g in data.gen)
 
     c_ref_angle = constraint(core, c_ref_angle_polar(va[i]) for i in data.ref_buses)
-    
+
     c_ohms_law = constraint(
         core,
         c_ohms_law_dcopf(br, pf[br.i], va[br.f_bus], va[br.t_bus])
@@ -91,7 +87,6 @@ function dcopf_model(
     filename;
     backend = nothing,
     T = Float64,
-
     user_callback = dummy_extension,
     kwargs...,
 )
