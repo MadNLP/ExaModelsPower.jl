@@ -33,6 +33,8 @@ function p_scopf_model(
 
     contingencies = []
 
+    #use k for second index corresponging to contingency (1=base)
+
     va = variable(core, length(data.bus), length(contingencies);)
     vm = variable(
             core,
@@ -49,38 +51,42 @@ function p_scopf_model(
     q = variable(core, length(data.arc), length(contingencies); lvar = -data.rate_a, uvar = data.rate_a)
 
     o = objective(
-        core, gen_cost(g, pg[g.i]) for g in data.gen)
+        core, gen_cost(g, pg[g.i, 1]) for g in data.gen)
 
     #Fix power on contingency branches to 0
     #This does not satisfy outed branch, but allows us to have rectangular arrays without unconstrained variables
-    c_fix_p_cont = constraint(core, p[a.i] for a in data.arcarray)
-    c_fix_q_cont = constraint(core, q[a.i] for a in data.arcarray)
+    c_fix_p_cont = constraint(core, p[a.i, a.k] for a in data.contingencyarcarray)
+    c_fix_q_cont = constraint(core, q[a.i, a.k] for a in data.contingencyarcarray)
 
+    #add con(k)
     c_ref_angle = constraint(core, c_ref_angle_polar(va[i]) for i in data.ref_buses)
 
-    c_to_active_power_flow = constraint(core, c_to_active_power_flow_polar(b, p[b.f_idx],
-        vm[b.f_bus],vm[b.t_bus],va[b.f_bus],va[b.t_bus]) for b in data.branch)
 
-    c_to_reactive_power_flow = constraint(core, c_to_reactive_power_flow_polar(b, q[b.f_idx],
-        vm[b.f_bus],vm[b.t_bus],va[b.f_bus],va[b.t_bus]) for b in data.branch)
+    #iterate over data.branch (does not include contingencies)
+    c_to_active_power_flow = constraint(core, c_to_active_power_flow_polar(b, p[b.f_idx, b.k],
+        vm[b.f_bus, b.k],vm[b.t_bus, b.k],va[b.f_bus, b.k],va[b.t_bus, b.k]) for b in data.branch)
 
-    c_from_active_power_flow = constraint(core, c_from_active_power_flow_polar(b, p[b.t_idx],
-        vm[b.f_bus],vm[b.t_bus],va[b.f_bus],va[b.t_bus]) for b in data.branch)
+    c_to_reactive_power_flow = constraint(core, c_to_reactive_power_flow_polar(b, q[b.f_idx, b.k],
+        vm[b.f_bus, b.k],vm[b.t_bus, b.k],va[b.f_bus, b.k],va[b.t_bus, b.k]) for b in data.branch)
 
-    c_from_reactive_power_flow = constraint(core, c_from_reactive_power_flow_polar(b, q[b.t_idx],
-        vm[b.f_bus],vm[b.t_bus],va[b.f_bus],va[b.t_bus]) for b in data.branch)
+    c_from_active_power_flow = constraint(core, c_from_active_power_flow_polar(b, p[b.t_idx, b.k],
+        vm[b.f_bus, b.k],vm[b.t_bus, b.k],va[b.f_bus, b.k],va[b.t_bus, b.k]) for b in data.branch)
+
+    c_from_reactive_power_flow = constraint(core, c_from_reactive_power_flow_polar(b, q[b.t_idx, b.k],
+        vm[b.f_bus, b.k],vm[b.t_bus, b.k],va[b.f_bus, b.k],va[b.t_bus, b.k]) for b in data.branch)
 
     c_phase_angle_diff = constraint(
         core,
-        c_phase_angle_diff_polar(b,va[b.f_bus],va[b.t_bus]) for b in data.branch;
+        c_phase_angle_diff_polar(b,va[b.f_bus, b.k],va[b.t_bus, b.k]) for b in data.branch;
         lcon = data.angmin,
         ucon = data.angmax,
     )
 
-    c_active_power_balance = constraint(core, c_active_power_balance_demand_polar(b, vm[b.i]) for b in data.bus)
+    c_active_power_balance = constraint(core, c_active_power_balance_demand_polar(b, vm[b.i, b.k]) for b in data.bus)
 
-    c_reactive_power_balance = constraint(core, c_reactive_power_balance_demand_polar(b, vm[b.i]) for b in data.bus)
+    c_reactive_power_balance = constraint(core, c_reactive_power_balance_demand_polar(b, vm[b.i, b.k]) for b in data.bus)
 
+    #add appropriate tracking system
     c_active_power_balance_arcs = constraint!(core, c_active_power_balance, a.bus => p[a.i] for a in data.arc)
     c_reactive_power_balance_arcs = constraint!(core, c_reactive_power_balance, a.bus => q[a.i] for a in data.arc)
 
@@ -88,12 +94,12 @@ function p_scopf_model(
     c_active_power_balance_gen = constraint!(core, c_reactive_power_balance, g.bus => -qg[g.i] for g in data.gen)
 
     c_from_thermal_limit = constraint(
-        core, c_thermal_limit(b,p[b.f_idx],q[b.f_idx]) for b in data.branch;
+        core, c_thermal_limit(b,p[b.f_idx, b.k],q[b.f_idx, b.k]) for b in data.branch;
         lcon = fill!(similar(data.branch, Float64, length(data.branch)), -Inf),
         )
 
     c_to_thermal_limit = constraint(
-        core, c_thermal_limit(b,p[b.t_idx],q[b.t_idx])
+        core, c_thermal_limit(b,p[b.t_idx, b.k],q[b.t_idx, b.k])
         for b in data.branch;
         lcon = fill!(similar(data.branch, Float64, length(data.branch)), -Inf),
     )
