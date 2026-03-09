@@ -13,6 +13,7 @@ include("goc3_parser.jl")
 include("scopf.jl")
 include("mpopf.jl")
 include("sc_parser.jl")
+include("p_scopf.jl")
 
 const NAMES = filter(names(@__MODULE__; all = true)) do x
     str = string(x)
