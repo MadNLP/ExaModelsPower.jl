@@ -9,6 +9,8 @@ function parse_sc_power_data(filename, contingencies)
 
     K = length(contingencies)+1
 
+    n_branch = length(data.branch)
+
     data = (
         ;
         data...,
@@ -16,8 +18,8 @@ function parse_sc_power_data(filename, contingencies)
         busarray = [(;b, k = k) for b in data.bus, k in 1:K ],
         genarray = [(;g, k = k) for g in data.gen, k in 1:K ],
         brancharray = [(;b, k = k) for b in data.branch, k in 1:K if k == 1 || b.i != contingencies[k-1]],
-        arcarray = [(;a, k = k) for a in data.arc, k in 1:K if k == 1 || (a.i != contingencies[k-1] && a.i != K + contingencies[k-1])],
-        contingencyarcarray = [(;a, k = k) for a in data.arc, k in 2:K if (a.i == contingencies[k-1] || a.i == K + contingencies[k-1])],
+        arcarray = [(;a, k = k) for a in data.arc, k in 1:K if k == 1 || (a.i != contingencies[k-1] && a.i != n_branch + contingencies[k-1])],
+        contingencyarcarray = [(;a, k = k) for a in data.arc, k in 2:K if (a.i == contingencies[k-1] || a.i == n_branch + contingencies[k-1])],
     )
 
     return data
@@ -69,8 +71,8 @@ function p_scopf_model(
 
     println(data.contingencyarcarray)
     #Power is constant for all Pg, Vm across contingencies
-    c_fix_pg_cont = constraint(core, pg[g.i, 1] - pg[g.i, k] for (g, k) in data.genarray if k > 1)
-    c_fix_vm_cont = constraint(core, vm[g.bus, 1] - vm[g.bus, k] for (g, k) in data.genarray if k > 1)
+    c_fix_pg_cont = constraint(core, pg[g.i, 1] - pg[g.i, k] for (g, k) in data.genarray if k > 1 && data.ref_buses[1] != g.bus)
+    c_fix_vm_cont = constraint(core, vm[g.bus, 1] - vm[g.bus, k] for (g, k) in data.genarray if k > 1)# && data.ref_buses[1] != g.bus)
 
     
     #add con(k)
