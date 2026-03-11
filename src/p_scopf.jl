@@ -17,6 +17,8 @@ function parse_sc_power_data(filename, contingencies)
         refarray = [(i,k) for i in data.ref_buses, k in 1:K],
         busarray = [(;b, k = k) for b in data.bus, k in 1:K ],
         genarray = [(;g, k = k) for g in data.gen, k in 1:K ],
+        genarray_pg = [(;g, k = k) for g in data.gen, k in 2:K if data.ref_buses[1] != g.bus],
+        genarray_vm = [(;g, k = k) for g in data.gen, k in 2:K],
         brancharray = [(;b, k = k) for b in data.branch, k in 1:K if k == 1 || b.i != contingencies[k-1]],
         arcarray = [(;a, k = k) for a in data.arc, k in 1:K if k == 1 || (a.i != contingencies[k-1] && a.i != n_branch + contingencies[k-1])],
         contingencyarcarray = [(;a, k = k) for a in data.arc, k in 2:K if (a.i == contingencies[k-1] || a.i == n_branch + contingencies[k-1])],
@@ -31,11 +33,14 @@ function p_scopf_model(
     backend = nothing,
     T = Float64,
     user_callback = dummy_extension,
+    mode = :preventive,
+    ramp_rate = 0.1,
     kwargs...,
 )
     contingencies = readdlm(contingencies_file)
     
     data = parse_sc_power_data(filename, contingencies)
+    ref_bus = data.ref_buses[1]
     data = convert_data(data, backend)
 
     Nbus = size(data.bus, 1)
@@ -50,16 +55,19 @@ function p_scopf_model(
     vm = variable(
             core,
             length(data.bus), K;
-            start = fill!(similar(data.bus, Float64), 1.0),
+            start = fill!(similar(data.busarray, Float64), 1.0),
             lvar = repeat(data.vmin, 1, K),
             uvar = repeat(data.vmax, 1, K),
         )
 
-    pg = variable(core, length(data.gen), K; lvar = repeat(data.pmin, 1, K), uvar = repeat(data.pmax, 1, K))
-    qg = variable(core, length(data.gen), K; lvar = repeat(data.qmin, 1, K), uvar = repeat(data.qmax, 1, K))
+    pg_0 = variable(core, length(data.gen))
+    vm_0 = variable(core, length(data.bus))
 
-    p = variable(core, length(data.arc), K; lvar = repeat(-data.rate_a, 1, K), uvar = repeat(data.rate_a, 1, K))
-    q = variable(core, length(data.arc), K; lvar = repeat(-data.rate_a, 1, K), uvar = repeat(data.rate_a, 1, K))
+    pg = variable(core, length(data.gen), K; lvar = repeat(data.pmin, 1, K), uvar = repeat(data.pmax, 1, K), start = fill!(similar(data.genarray, Float64), 0.01),)
+    qg = variable(core, length(data.gen), K; lvar = repeat(data.qmin, 1, K), uvar = repeat(data.qmax, 1, K), start = fill!(similar(data.genarray, Float64), 0.01),)
+
+    p = variable(core, length(data.arc), K; lvar = repeat(-data.rate_a, 1, K), uvar = repeat(data.rate_a, 1, K), start = fill!(similar(data.arcarray, Float64), 0.01),)
+    q = variable(core, length(data.arc), K; lvar = repeat(-data.rate_a, 1, K), uvar = repeat(data.rate_a, 1, K), start = fill!(similar(data.arcarray, Float64), 0.01),)
 
     o = objective(
         core, gen_cost(g, pg[g.i, 1]) for g in data.gen)
@@ -69,11 +77,22 @@ function p_scopf_model(
     c_fix_p_cont = constraint(core, p[a.i, k] for (a, k) in data.contingencyarcarray)
     c_fix_q_cont = constraint(core, q[a.i, k] for (a, k) in data.contingencyarcarray)
 
-    println(data.contingencyarcarray)
-    #Power is constant for all Pg, Vm across contingencies
-    c_fix_pg_cont = constraint(core, pg[g.i, 1] - pg[g.i, k] for (g, k) in data.genarray if k > 1 && data.ref_buses[1] != g.bus)
-    c_fix_vm_cont = constraint(core, vm[g.bus, 1] - vm[g.bus, k] for (g, k) in data.genarray if k > 1)# && data.ref_buses[1] != g.bus)
+    c_fix_pg_0 = constraint(core, pg_0[g.i] - pg[g.i, 1] for g in data.gen)
+    c_fix_vm_0 = constraint(core, vm_0[b.i] - vm[b.i, 1] for b in data.bus)
 
+    if mode == :preventive
+        #Power is constant for all Pg, Vm across contingencies
+        c_fix_pg_cont = constraint(core, pg_0[g.i] - pg[g.i, k] for (g, k) in data.genarray_pg)
+        c_fix_vm_cont = constraint(core, vm_0[g.bus] - vm[g.bus, k] for (g, k) in data.genarray_vm)# && data.ref_buses[1] != g.bus)
+    elseif mode == :corrective
+        #should this include slack bus?
+        c_fix_pg_cont = constraint(core, pg_0[g.i] - pg[g.i, k] for (g, k) in data.genarray_pg; 
+        lcon = repeat(-ramp_rate*data.pmax, 1, K),
+        ucon = repeat(ramp_rate*data.pmax, 1, K))
+        c_fix_vm_cont = constraint(core, vm_0[g.bus] - vm[g.bus, k] for (g, k) in data.genarray_vm)# && data.ref_buses[1] != g.bus)
+    else
+        error("Invalid mode specified, try :preventive or :corrective")
+    end
     
     #add con(k)
     c_ref_angle = constraint(core, c_ref_angle_polar(va[i, k]) for (i, k) in data.refarray)
