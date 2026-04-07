@@ -46,8 +46,8 @@ function c_reactive_power_balance_demand_polar(b, vm)
 end
 
 #no coordinates specified
-function c_thermal_limit(b, p,q)
-    return p^2 + q^2 - b.rate_a^2
+function c_thermal_limit(b, p, q; thermal_limit_response = 0) #for security constraint, we allow for the relaxation of thermal limits
+    return p^2 + q^2 - (b.rate_a*(1+thermal_limit_response))^2
 end
 
 #only for mp

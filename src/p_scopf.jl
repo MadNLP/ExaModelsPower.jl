@@ -1,5 +1,5 @@
 
-function parse_sc_power_data(filename, contingencies)
+function parse_sc_power_data(filename, contingencies, shed_response)
 
     data = parse_ac_power_data(filename)
 
@@ -11,17 +11,29 @@ function parse_sc_power_data(filename, contingencies)
 
     n_branch = length(data.branch)
 
+    slack_bus = data.ref_buses[1]
+
+    make_bounds(val) = begin
+        X = fill(val, length(data.bus), K)
+        X[1, :] .= 0
+        X
+    end
+
+
     data = (
         ;
         data...,
         refarray = [(i,k) for i in data.ref_buses, k in 1:K],
         busarray = [(;b, k = k) for b in data.bus, k in 1:K ],
         genarray = [(;g, k = k) for g in data.gen, k in 1:K ],
-        genarray_pg = [(;g, k = k) for g in data.gen, k in 2:K if data.ref_buses[1] != g.bus],
-        genarray_vm = [(;g, k = k) for g in data.gen, k in 2:K],
+        genarray_pg = [(;g, k = k) for g in data.gen, k in 2:K if slack_bus != g.bus], #dont fix vm or pg of slack bus
+        genarray_vm = [(;g, k = k) for g in data.gen, k in 2:K if slack_bus != g.bus],
         brancharray = [(;b, k = k) for b in data.branch, k in 1:K if k == 1 || b.i != contingencies[k-1]],
+        brancharray_cont = [(;b, k = k) for b in data.branch, k in 1:K if k != 1 && b.i != contingencies[k-1]],
         arcarray = [(;a, k = k) for a in data.arc, k in 1:K if k == 1 || (a.i != contingencies[k-1] && a.i != n_branch + contingencies[k-1])],
         contingencyarcarray = [(;a, k = k) for a in data.arc, k in 2:K if (a.i == contingencies[k-1] || a.i == n_branch + contingencies[k-1])],
+        load_lcon = make_bounds(-shed_response),
+        load_ucon = make_bounds(shed_response)
     )
 
     return data
@@ -35,11 +47,13 @@ function p_scopf_model(
     user_callback = dummy_extension,
     mode = :preventive,
     ramp_rate = 0.1,
+    shed_response = 0.05,
+    thermal_limit_response = 0.1,
     kwargs...,
 )
     contingencies = readdlm(contingencies_file)
     
-    data = parse_sc_power_data(filename, contingencies)
+    data = parse_sc_power_data(filename, contingencies, shed_response)
     ref_bus = data.ref_buses[1]
     data = convert_data(data, backend)
 
@@ -83,13 +97,13 @@ function p_scopf_model(
     if mode == :preventive
         #Power is constant for all Pg, Vm across contingencies
         c_fix_pg_cont = constraint(core, pg_0[g.i] - pg[g.i, k] for (g, k) in data.genarray_pg)
-        c_fix_vm_cont = constraint(core, vm_0[g.bus] - vm[g.bus, k] for (g, k) in data.genarray_vm)# && data.ref_buses[1] != g.bus)
+        c_fix_vm_cont = constraint(core, vm_0[g.bus] - vm[g.bus, k] for (g, k) in data.genarray_vm) 
     elseif mode == :corrective
         #should this include slack bus?
         c_fix_pg_cont = constraint(core, pg_0[g.i] - pg[g.i, k] for (g, k) in data.genarray_pg; 
         lcon = repeat(-ramp_rate*data.pmax, 1, K),
         ucon = repeat(ramp_rate*data.pmax, 1, K))
-        c_fix_vm_cont = constraint(core, vm_0[g.bus] - vm[g.bus, k] for (g, k) in data.genarray_vm)# && data.ref_buses[1] != g.bus)
+        c_fix_vm_cont = constraint(core, vm_0[g.bus] - vm[g.bus, k] for (g, k) in data.genarray_vm)
     else
         error("Invalid mode specified, try :preventive or :corrective")
     end
@@ -119,9 +133,9 @@ function p_scopf_model(
         ucon = repeat(data.angmax, 1, K),
     )
     
-    c_active_power_balance = constraint(core, c_active_power_balance_demand_polar(b, vm[b.i, k]) for (b, k) in data.busarray)
+    c_active_power_balance = constraint(core, c_active_power_balance_demand_polar(b, vm[b.i, k]) for (b, k) in data.busarray, lcon = data.load_lcon, ucon = data.load_ucon) #the bounds break this?
 
-    c_reactive_power_balance = constraint(core, c_reactive_power_balance_demand_polar(b, vm[b.i, k]) for (b, k) in data.busarray)
+    c_reactive_power_balance = constraint(core, c_reactive_power_balance_demand_polar(b, vm[b.i, k]) for (b, k) in data.busarray, lcon = data.load_lcon, ucon = data.load_ucon)
 
     #add appropriate tracking system
     c_active_power_balance_arcs = constraint!(core, c_active_power_balance, a.bus + Nbus*(k-1) => p[a.i, k] for (a, k) in data.arcarray)
@@ -132,15 +146,27 @@ function p_scopf_model(
 
     
     c_from_thermal_limit = constraint(
-        core, c_thermal_limit(b,p[b.f_idx, k],q[b.f_idx, k]) for (b, k) in data.brancharray;
-        lcon = fill(-Inf, size(data.brancharray))
+        core, c_thermal_limit(b,p[b.f_idx, 1], q[b.f_idx, 1]) for b in data.branch;
+        lcon = fill(-Inf, size(data.branch))
     )
-
     
     c_to_thermal_limit = constraint(
-        core, c_thermal_limit(b,p[b.t_idx, k],q[b.t_idx, k])
-        for (b, k) in data.brancharray;
-        lcon = fill(-Inf, size(data.brancharray))
+        core, c_thermal_limit(b,p[b.t_idx, 1],q[b.t_idx, 1])
+        for b in data.branch;
+        lcon = fill(-Inf, size(data.branch))
+    )
+
+    #for contingencies, ease the thermal limit by some amount
+    c_from_thermal_limit_cont = constraint(
+        core, c_thermal_limit(b,p[b.f_idx, k], q[b.f_idx, k]; thermal_limit_response=thermal_limit_response)
+         for (b, k) in data.brancharray_cont;
+        lcon = fill(-Inf, size(data.brancharray_cont))
+    )
+    
+    c_to_thermal_limit_cont = constraint(
+        core, c_thermal_limit(b,p[b.t_idx, k],q[b.t_idx, k]; thermal_limit_response=thermal_limit_response)
+        for (b, k) in data.brancharray_cont;
+        lcon = fill(-Inf, size(data.brancharray_cont))
     )
     
     vars = (
