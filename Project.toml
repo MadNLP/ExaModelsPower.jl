@@ -10,7 +10,7 @@ ExaPowerIO = "14903efe-9500-4d7f-a589-7ab7e15da6de"
 
 [compat]
 JSON = "0.21"
-ExaModels = "0.9"
+ExaModels = "0.10"
 ExaPowerIO = "0.3"
 MadNLP = "0.8"
 MadNLPGPU = "0.7"
