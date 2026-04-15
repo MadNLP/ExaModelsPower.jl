@@ -1,5 +1,5 @@
 function dummy_extension(core, vars, cons)
-    return (;), (;)
+    return core, (;), (;)
 end
 
 function build_polar_opf(data, user_callback; backend = nothing, T=Float64, kwargs...)
@@ -140,7 +140,7 @@ function build_polar_opf(data, user_callback; backend = nothing, T=Float64, kwar
         c_to_thermal_limit = c_to_thermal_limit
     )
 
-    vars2, cons2 = user_callback(core, vars, cons)
+    core, vars2, cons2 = user_callback(core, vars, cons)
     model =ExaModel(core; kwargs...)
 
     vars = (;vars..., vars2...)
@@ -302,7 +302,7 @@ function build_rect_opf(data, user_callback; backend = nothing, T=Float64, kwarg
         c_voltage_magnitude = c_voltage_magnitude
     )
 
-    vars2, cons2 = user_callback(core, vars, cons)
+    core, vars2, cons2 = user_callback(core, vars, cons)
     model =ExaModel(core; kwargs...)
 
     vars = (;vars..., vars2...)

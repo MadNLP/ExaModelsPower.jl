@@ -1,6 +1,6 @@
 function build_dcopf(data, user_callback; backend = nothing, T = Float64, core = nothing, kwargs...)
 
-    core = isnothing(core) ? ExaCore(T; backend = backend) : core
+    core = isnothing(core) ? ExaCore(T; backend = backend, concrete = Val(true)) : core
     T, backend = typeof(core).parameters[1], core.backend
 
     va = variable(core, length(data.bus))
@@ -54,7 +54,7 @@ function build_dcopf(data, user_callback; backend = nothing, T = Float64, core =
     )
 
 
-    vars2, cons2 = user_callback(core, vars, cons)
+    core, vars2, cons2 = user_callback(core, vars, cons)
     model =ExaModel(core; kwargs...)
 
     vars = (;vars..., vars2...)
