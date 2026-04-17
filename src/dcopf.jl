@@ -3,42 +3,24 @@ function build_dcopf(data, user_callback; backend = nothing, T = Float64, core =
     core = isnothing(core) ? ExaCore(T; backend = backend, concrete = Val(true)) : core
     T, backend = typeof(core).parameters[1], core.backend
 
-    va = variable(core, length(data.bus))
-    pg = variable(core, length(data.gen); lvar = data.pmin, uvar = data.pmax)
+    @add_var(core, va, length(data.bus))
 
+    @add_var(core, pg, length(data.gen); lvar = data.pmin, uvar = data.pmax)
 
-    pf = variable(
-        core,
-        length(data.branch);
-        lvar = -data.rate_a,
-        uvar = data.rate_a
-    )
+    @add_var(core, pf, length(data.branch); lvar = -data.rate_a, uvar = data.rate_a)
 
-    o = objective(core, gen_cost(g, pg[g.i]) for g in data.gen)
+    @add_obj(core, o, gen_cost(g, pg[g.i]) for g in data.gen)
 
-    c_ref_angle = constraint(core, c_ref_angle_polar(va[i]) for i in data.ref_buses)
+    @add_con(core, c_ref_angle, c_ref_angle_polar(va[i]) for i in data.ref_buses)
 
-    c_ohms_law = constraint(
-        core,
-        c_ohms_law_dcopf(br, pf[br.i], va[br.f_bus], va[br.t_bus])
-        for br in data.branch
-    )
+    @add_con(core, c_ohms_law, c_ohms_law_dcopf(br, pf[br.i], va[br.f_bus], va[br.t_bus]) for br in data.branch)
 
-    c_phase_angle_diff = constraint(
-        core,
-        c_phase_angle_diff_polar(b, va[b.f_bus], va[b.t_bus]) for b in data.branch;
-        lcon = data.angmin,
-        ucon = data.angmax,
-    )
+    @add_con(core, c_phase_angle_diff, c_phase_angle_diff_polar(b, va[b.f_bus], va[b.t_bus]) for b in data.branch; lcon = data.angmin, ucon = data.angmax)
 
-    c_active_power_balance = constraint(
-        core,
-        c_active_power_balance_dc(b) for b in data.bus
-
-    )
-    constraint!(core, c_active_power_balance, g.bus => -pg[g.i] for g in data.gen)
-    constraint!(core, c_active_power_balance, br.f_bus => pf[br.i] for br in data.branch)
-    constraint!(core, c_active_power_balance, br.t_bus => -pf[br.i] for br in data.branch)
+    @add_con(core, c_active_power_balance, c_active_power_balance_dc(b) for b in data.bus)
+    @add_con!(core, c_active_power_balance, g.bus => -pg[g.i] for g in data.gen)
+    @add_con!(core, c_active_power_balance, br.f_bus => pf[br.i] for br in data.branch)
+    @add_con!(core, c_active_power_balance, br.t_bus => -pf[br.i] for br in data.branch)
 
     vars = (
         va = va,
