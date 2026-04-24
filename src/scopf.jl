@@ -236,14 +236,14 @@ function goc3_model(
         if K > 0
             @add_con(core, c4, z_t_ctg_min[ind.t] - z_tk_ctg[ind.t, ind.k] for ind in sc_data.tk_index; lcon = fill(-Inf, size(sc_data.tk_index)))
             @add_con(core, c5, z_t_ctg_avg[t] * K for t in sc_data.periods)
-            @add_con!(core, c5_a, c5, ind.t => -z_tk_ctg[ind.t, ind.k] for ind in sc_data.tk_index)
+            @add_con!(core, c5, ind.t => -z_tk_ctg[ind.t, ind.k] for ind in sc_data.tk_index)
         else
             @add_con(core, c4, z_t_ctg_min[t] for t in sc_data.periods)
             @add_con(core, c5, z_t_ctg_avg[t] for t in sc_data.periods)
         end
         @add_con(core, c10, z_tk_ctg[ind.t, ind.k] for ind in sc_data.tk_index)
-        @add_con!(core, c10_ln, c10, ln.t + L_T * (ln.ctg - 1) => z_jtk_s_ln[ln.flat_jtk_ln] for ln in sc_data.jtk_ln_flattened)
-        @add_con!(core, c10_xf, c10, xf.t + L_T * (xf.ctg - 1) => z_jtk_s_xf[xf.flat_jtk_xf] for xf in sc_data.jtk_xf_flattened)
+        @add_con!(core, c10, ln.t + L_T * (ln.ctg - 1) => z_jtk_s_ln[ln.flat_jtk_ln] for ln in sc_data.jtk_ln_flattened)
+        @add_con!(core, c10, xf.t + L_T * (xf.ctg - 1) => z_jtk_s_xf[xf.flat_jtk_xf] for xf in sc_data.jtk_xf_flattened)
     end
 
     #4.2.1 Bus power mismatch and penalized mismatch definitions
@@ -256,30 +256,30 @@ function goc3_model(
     @add_con(core, c16, z_it_q[b.i, b.t] - b.dt * sum(sc_data.c_q) * q_it_plus[b.i, b.t] for b in sc_data.busarray)
     #4.2.3 Bus real and reactive power balance
     @add_con(core, c17, p_it[b.i, b.t] for b in sc_data.busarray)
-    @add_con!(core, c17_pr, c17, pr.bus + I * (pr.t - 1) => p_jt_pr[pr.j_pr, pr.t] for pr in sc_data.prarray)
-    @add_con!(core, c17_cs, c17, cs.bus + I * (cs.t - 1) => -p_jt_cs[cs.j_cs, cs.t] for cs in sc_data.csarray)
-    @add_con!(core, c17_sh, c17, sh.bus + I * (sh.t - 1) => -p_jt_sh[sh.j_sh, sh.t] for sh in sc_data.shuntarray)
+    @add_con!(core, c17, pr.bus + I * (pr.t - 1) => p_jt_pr[pr.j_pr, pr.t] for pr in sc_data.prarray)
+    @add_con!(core, c17, cs.bus + I * (cs.t - 1) => -p_jt_cs[cs.j_cs, cs.t] for cs in sc_data.csarray)
+    @add_con!(core, c17, sh.bus + I * (sh.t - 1) => -p_jt_sh[sh.j_sh, sh.t] for sh in sc_data.shuntarray)
 
     #Reminder: fr and to split for ln, xf, and dc
-    @add_con!(core, c17_fr_ln, c17, ln.fr_bus + I * (ln.t - 1) => -p_jt_fr_ln[ln.j_ln, ln.t] for ln in sc_data.aclbrancharray)
-    @add_con!(core, c17_fr_xf, c17, xf.fr_bus + I * (xf.t - 1) => -p_jt_fr_xf[xf.j_xf, xf.t] for xf in sc_data.acxbrancharray)
-    @add_con!(core, c17_fr_dc, c17, dc.fr_bus + I * (dc.t - 1) => -p_jt_fr_dc[dc.j_dc, dc.t] for dc in sc_data.dclinearray)
-    @add_con!(core, c17_to_ln, c17, ln.to_bus + I * (ln.t - 1) => -p_jt_to_ln[ln.j_ln, ln.t] for ln in sc_data.aclbrancharray)
-    @add_con!(core, c17_to_xf, c17, xf.to_bus + I * (xf.t - 1) => -p_jt_to_xf[xf.j_xf, xf.t] for xf in sc_data.acxbrancharray)
-    @add_con!(core, c17_to_dc, c17, dc.to_bus + I * (dc.t - 1) => -p_jt_to_dc[dc.j_dc, dc.t] for dc in sc_data.dclinearray)
+    @add_con!(core, c17, ln.fr_bus + I * (ln.t - 1) => -p_jt_fr_ln[ln.j_ln, ln.t] for ln in sc_data.aclbrancharray)
+    @add_con!(core, c17, xf.fr_bus + I * (xf.t - 1) => -p_jt_fr_xf[xf.j_xf, xf.t] for xf in sc_data.acxbrancharray)
+    @add_con!(core, c17, dc.fr_bus + I * (dc.t - 1) => -p_jt_fr_dc[dc.j_dc, dc.t] for dc in sc_data.dclinearray)
+    @add_con!(core, c17, ln.to_bus + I * (ln.t - 1) => -p_jt_to_ln[ln.j_ln, ln.t] for ln in sc_data.aclbrancharray)
+    @add_con!(core, c17, xf.to_bus + I * (xf.t - 1) => -p_jt_to_xf[xf.j_xf, xf.t] for xf in sc_data.acxbrancharray)
+    @add_con!(core, c17, dc.to_bus + I * (dc.t - 1) => -p_jt_to_dc[dc.j_dc, dc.t] for dc in sc_data.dclinearray)
 
     @add_con(core, c18, q_it[b.i, b.t] for b in sc_data.busarray)
-    @add_con!(core, c18_pr, c18, pr.bus + I * (pr.t - 1) => q_jt_pr[pr.j_pr, pr.t] for pr in sc_data.prarray)
-    @add_con!(core, c18_cs, c18, cs.bus + I * (cs.t - 1) => -q_jt_cs[cs.j_cs, cs.t] for cs in sc_data.csarray)
-    @add_con!(core, c18_sh, c18, sh.bus + I * (sh.t - 1) => -q_jt_sh[sh.j_sh, sh.t] for sh in sc_data.shuntarray)
+    @add_con!(core, c18, pr.bus + I * (pr.t - 1) => q_jt_pr[pr.j_pr, pr.t] for pr in sc_data.prarray)
+    @add_con!(core, c18, cs.bus + I * (cs.t - 1) => -q_jt_cs[cs.j_cs, cs.t] for cs in sc_data.csarray)
+    @add_con!(core, c18, sh.bus + I * (sh.t - 1) => -q_jt_sh[sh.j_sh, sh.t] for sh in sc_data.shuntarray)
 
     #Reminder: fr and to split for ln, xf, and dc
-    @add_con!(core, c18_fr_ln, c18, ln.fr_bus + I * (ln.t - 1) => -q_jt_fr_ln[ln.j_ln, ln.t] for ln in sc_data.aclbrancharray)
-    @add_con!(core, c18_fr_xf, c18, xf.fr_bus + I * (xf.t - 1) => -q_jt_fr_xf[xf.j_xf, xf.t] for xf in sc_data.acxbrancharray)
-    @add_con!(core, c18_fr_dc, c18, dc.fr_bus + I * (dc.t - 1) => -q_jt_fr_dc[dc.j_dc, dc.t] for dc in sc_data.dclinearray)
-    @add_con!(core, c18_to_ln, c18, ln.to_bus + I * (ln.t - 1) => -q_jt_to_ln[ln.j_ln, ln.t] for ln in sc_data.aclbrancharray)
-    @add_con!(core, c18_to_xf, c18, xf.to_bus + I * (xf.t - 1) => -q_jt_to_xf[xf.j_xf, xf.t] for xf in sc_data.acxbrancharray)
-    @add_con!(core, c18_to_dc, c18, dc.to_bus + I * (dc.t - 1) => -q_jt_to_dc[dc.j_dc, dc.t] for dc in sc_data.dclinearray)
+    @add_con!(core, c18, ln.fr_bus + I * (ln.t - 1) => -q_jt_fr_ln[ln.j_ln, ln.t] for ln in sc_data.aclbrancharray)
+    @add_con!(core, c18, xf.fr_bus + I * (xf.t - 1) => -q_jt_fr_xf[xf.j_xf, xf.t] for xf in sc_data.acxbrancharray)
+    @add_con!(core, c18, dc.fr_bus + I * (dc.t - 1) => -q_jt_fr_dc[dc.j_dc, dc.t] for dc in sc_data.dclinearray)
+    @add_con!(core, c18, ln.to_bus + I * (ln.t - 1) => -q_jt_to_ln[ln.j_ln, ln.t] for ln in sc_data.aclbrancharray)
+    @add_con!(core, c18, xf.to_bus + I * (xf.t - 1) => -q_jt_to_xf[xf.j_xf, xf.t] for xf in sc_data.acxbrancharray)
+    @add_con!(core, c18, dc.to_bus + I * (dc.t - 1) => -q_jt_to_dc[dc.j_dc, dc.t] for dc in sc_data.dclinearray)
 
     #4.3.2 Reserve shortfall penalties
     @add_con(core, c28, z_nt_rgu[n.n_p, n.t] - n.dt * n.c_rgu * p_nt_rgu_plus[n.n_p, n.t] for n in sc_data.preservearray)
@@ -293,9 +293,9 @@ function goc3_model(
     
     #4.3.3 Reserve requirements
     @add_con(core, c36, p_nt_rgu_req[n.n_p, n.t] / n.σ_rgu for n in sc_data.preservearray)
-    @add_con!(core, c36_cs, c36, cs.n + L_N_p * (cs.t - 1) => -p_jt_cs[cs.j_cs, cs.t] for cs in sc_data.preservesetarray_cs)
+    @add_con!(core, c36, cs.n + L_N_p * (cs.t - 1) => -p_jt_cs[cs.j_cs, cs.t] for cs in sc_data.preservesetarray_cs)
     @add_con(core, c37, p_nt_rgd_req[n.n_p, n.t] / n.σ_rgd for n in sc_data.preservearray)
-    @add_con!(core, c37_cs, c37, cs.n + L_N_p * (cs.t - 1) => -p_jt_cs[cs.j_cs, cs.t] for cs in sc_data.preservesetarray_cs)
+    @add_con!(core, c37, cs.n + L_N_p * (cs.t - 1) => -p_jt_cs[cs.j_cs, cs.t] for cs in sc_data.preservesetarray_cs)
     #assuming c_scr and c_nsc are always positive
     @add_con(core, cmax38, p_jt_pr_max[pr.n_p, pr.t] - p_jt_pr[pr.j_pr, pr.t] for pr in sc_data.preservesetarray_pr; ucon = fill(Inf, size(sc_data.prarray)))
     @add_con(core, c38, p_nt_scr_req[n.n_p, n.t] - n.σ_scr * p_jt_pr_max[n.n_p, n.t] for n in sc_data.preservearray)
@@ -304,36 +304,36 @@ function goc3_model(
     #4.3.4 Reserve balance
     #Reminder, p and q sets have been split up for pr and cs
     @add_con(core, c40, p_nt_rgu_plus[n.n_p, n.t] - p_nt_rgu_req[n.n_p, n.t] for n in sc_data.preservearray; ucon = fill(Inf, size(sc_data.preservearray)))
-    @add_con!(core, c40_pr, c40, pr.n_p + L_N_p * (pr.t - 1) => p_jt_rgu_pr[pr.j_pr, pr.t] for pr in sc_data.preservesetarray_pr)
-    @add_con!(core, c40_cs, c40, cs.n_p + L_N_p * (cs.t - 1) => p_jt_rgu_cs[cs.j_cs, cs.t] for cs in sc_data.preservesetarray_cs)
+    @add_con!(core, c40, pr.n_p + L_N_p * (pr.t - 1) => p_jt_rgu_pr[pr.j_pr, pr.t] for pr in sc_data.preservesetarray_pr)
+    @add_con!(core, c40, cs.n_p + L_N_p * (cs.t - 1) => p_jt_rgu_cs[cs.j_cs, cs.t] for cs in sc_data.preservesetarray_cs)
 
     @add_con(core, c41, p_nt_rgd_plus[n.n_p, n.t] - p_nt_rgd_req[n.n_p, n.t] for n in sc_data.preservearray; ucon = fill(Inf, size(sc_data.preservearray)))
-    @add_con!(core, c41_pr, c41, pr.n_p + L_N_p * (pr.t - 1) => p_jt_rgd_pr[pr.j_pr, pr.t] for pr in sc_data.preservesetarray_pr)
-    @add_con!(core, c41_cs, c41, cs.n_p + L_N_p * (cs.t - 1) => p_jt_rgd_cs[cs.j_cs, cs.t] for cs in sc_data.preservesetarray_cs)
+    @add_con!(core, c41, pr.n_p + L_N_p * (pr.t - 1) => p_jt_rgd_pr[pr.j_pr, pr.t] for pr in sc_data.preservesetarray_pr)
+    @add_con!(core, c41, cs.n_p + L_N_p * (cs.t - 1) => p_jt_rgd_cs[cs.j_cs, cs.t] for cs in sc_data.preservesetarray_cs)
 
     @add_con(core, c42, p_nt_scr_plus[n.n_p, n.t] - p_nt_rgu_req[n.n_p, n.t] - p_nt_scr_req[n.n_p, n.t] for n in sc_data.preservearray; ucon = fill(Inf, size(sc_data.preservearray)))
-    @add_con!(core, c42_pr, c42, pr.n_p + L_N_p * (pr.t - 1) => p_jt_rgu_pr[pr.j_pr, pr.t] + p_jt_scr_pr[pr.j_pr, pr.t] for pr in sc_data.preservesetarray_pr)
-    @add_con!(core, c42_cs, c42, cs.n_p + L_N_p * (cs.t - 1) => p_jt_rgu_cs[cs.j_cs, cs.t] + p_jt_scr_cs[cs.j_cs, cs.t] for cs in sc_data.preservesetarray_cs)
+    @add_con!(core, c42, pr.n_p + L_N_p * (pr.t - 1) => p_jt_rgu_pr[pr.j_pr, pr.t] + p_jt_scr_pr[pr.j_pr, pr.t] for pr in sc_data.preservesetarray_pr)
+    @add_con!(core, c42, cs.n_p + L_N_p * (cs.t - 1) => p_jt_rgu_cs[cs.j_cs, cs.t] + p_jt_scr_cs[cs.j_cs, cs.t] for cs in sc_data.preservesetarray_cs)
 
     @add_con(core, c43, p_nt_nsc_plus[n.n_p, n.t] - p_nt_rgu_req[n.n_p, n.t] - p_nt_scr_req[n.n_p, n.t] - p_nt_nsc_req[n.n_p, n.t] for n in sc_data.preservearray; ucon = fill(Inf, size(sc_data.preservearray)))
-    @add_con!(core, c43_pr, c43, pr.n_p + L_N_p * (pr.t - 1) => p_jt_rgu_pr[pr.j_pr, pr.t] + p_jt_scr_pr[pr.j_pr, pr.t] + p_jt_nsc_pr[pr.j_pr, pr.t] for pr in sc_data.preservesetarray_pr)
-    @add_con!(core, c43_cs, c43, cs.n_p + L_N_p * (cs.t - 1) => p_jt_rgu_cs[cs.j_cs, cs.t] + p_jt_scr_cs[cs.j_cs, cs.t] for cs in sc_data.preservesetarray_cs)
+    @add_con!(core, c43, pr.n_p + L_N_p * (pr.t - 1) => p_jt_rgu_pr[pr.j_pr, pr.t] + p_jt_scr_pr[pr.j_pr, pr.t] + p_jt_nsc_pr[pr.j_pr, pr.t] for pr in sc_data.preservesetarray_pr)
+    @add_con!(core, c43, cs.n_p + L_N_p * (cs.t - 1) => p_jt_rgu_cs[cs.j_cs, cs.t] + p_jt_scr_cs[cs.j_cs, cs.t] for cs in sc_data.preservesetarray_cs)
 
     @add_con(core, c44, p_nt_rru_plus[n.n_p, n.t] - n.p_rru_min for n in sc_data.preservearray; ucon = fill(Inf, size(sc_data.preservearray)))
-    @add_con!(core, c44_pr, c44, pr.n_p + L_N_p * (pr.t - 1) => p_jt_rru_on_pr[pr.j_pr, pr.t] + p_jt_rru_off_pr[pr.j_pr, pr.t] for pr in sc_data.preservesetarray_pr)
-    @add_con!(core, c44_cs, c44, cs.n_p + L_N_p * (cs.t - 1) => p_jt_rru_on_cs[cs.j_cs, cs.t] for cs in sc_data.preservesetarray_cs)
+    @add_con!(core, c44, pr.n_p + L_N_p * (pr.t - 1) => p_jt_rru_on_pr[pr.j_pr, pr.t] + p_jt_rru_off_pr[pr.j_pr, pr.t] for pr in sc_data.preservesetarray_pr)
+    @add_con!(core, c44, cs.n_p + L_N_p * (cs.t - 1) => p_jt_rru_on_cs[cs.j_cs, cs.t] for cs in sc_data.preservesetarray_cs)
 
     @add_con(core, c45, p_nt_rrd_plus[n.n_p, n.t] - n.p_rrd_min for n in sc_data.preservearray; ucon = fill(Inf, size(sc_data.preservearray)))
-    @add_con!(core, c45_pr, c45, pr.n_p + L_N_p * (pr.t - 1) => p_jt_rrd_on_pr[pr.j_pr, pr.t] for pr in sc_data.preservesetarray_pr)
-    @add_con!(core, c45_cs, c45, cs.n_p + L_N_p * (cs.t - 1) => p_jt_rrd_on_cs[cs.j_cs, cs.t] + p_jt_rrd_off_cs[cs.j_cs, cs.t] for cs in sc_data.preservesetarray_cs)
+    @add_con!(core, c45, pr.n_p + L_N_p * (pr.t - 1) => p_jt_rrd_on_pr[pr.j_pr, pr.t] for pr in sc_data.preservesetarray_pr)
+    @add_con!(core, c45, cs.n_p + L_N_p * (cs.t - 1) => p_jt_rrd_on_cs[cs.j_cs, cs.t] + p_jt_rrd_off_cs[cs.j_cs, cs.t] for cs in sc_data.preservesetarray_cs)
 
     @add_con(core, c46, q_nt_qru_plus[n.n_q, n.t] - n.q_qru_min for n in sc_data.qreservearray; ucon = fill(Inf, size(sc_data.qreservearray)))
-    @add_con!(core, c46_pr, c46, pr.n_q + L_N_q * (pr.t - 1) => q_jt_qru_pr[pr.j_pr, pr.t] for pr in sc_data.qreservesetarray_pr)
-    @add_con!(core, c46_cs, c46, cs.n_q + L_N_q * (cs.t - 1) => q_jt_qru_cs[cs.j_cs, cs.t] for cs in sc_data.qreservesetarray_cs)
+    @add_con!(core, c46, pr.n_q + L_N_q * (pr.t - 1) => q_jt_qru_pr[pr.j_pr, pr.t] for pr in sc_data.qreservesetarray_pr)
+    @add_con!(core, c46, cs.n_q + L_N_q * (cs.t - 1) => q_jt_qru_cs[cs.j_cs, cs.t] for cs in sc_data.qreservesetarray_cs)
 
     @add_con(core, c47, q_nt_qrd_plus[n.n_q, n.t] - n.q_qrd_min for n in sc_data.qreservearray; ucon = fill(Inf, size(sc_data.qreservearray)))
-    @add_con!(core, c47_pr, c47, pr.n_q + L_N_q * (pr.t - 1) => q_jt_qrd_pr[pr.j_pr, pr.t] for pr in sc_data.qreservesetarray_pr)
-    @add_con!(core, c47_cs, c47, cs.n_q + L_N_q * (cs.t - 1) => q_jt_qrd_cs[cs.j_cs, cs.t] for cs in sc_data.qreservesetarray_cs)
+    @add_con!(core, c47, pr.n_q + L_N_q * (pr.t - 1) => q_jt_qrd_pr[pr.j_pr, pr.t] for pr in sc_data.qreservesetarray_pr)
+    @add_con!(core, c47, cs.n_q + L_N_q * (cs.t - 1) => q_jt_qrd_cs[cs.j_cs, cs.t] for cs in sc_data.qreservesetarray_cs)
     #skipping constraints 48-67. Assume unit commitment is always satisfied
     
     #4.6.1 Producing and consuming device startup, shutdown, and dispatchable power
@@ -364,16 +364,16 @@ function goc3_model(
     #4.6.3 Maximum/minimum energy over multiple intervals
     #J_pr,cs has been split for pr and cs
     @add_con(core, c75_pr, e_w_plus_max_pr[w.w_en_max_pr_ind] + w.e_max for w in sc_data.W_en_max_pr; ucon = fill(Inf, size(sc_data.W_en_max_pr)))
-    @add_con!(core, c75_pr_a, c75_pr, t.w_en_max_pr_ind => -t.dt * p_jt_pr[t.j_pr, t.t] for t in sc_data.T_w_en_max_pr)
+    @add_con!(core, c75_pr, t.w_en_max_pr_ind => -t.dt * p_jt_pr[t.j_pr, t.t] for t in sc_data.T_w_en_max_pr)
 
     @add_con(core, c75_cs, e_w_plus_max_cs[w.w_en_max_cs_ind] + w.e_max for w in sc_data.W_en_max_cs; ucon = fill(Inf, size(sc_data.W_en_max_cs)))
-    @add_con!(core, c75_cs_a, c75_cs, t.w_en_max_cs_ind => -t.dt * p_jt_cs[t.j_cs, t.t] for t in sc_data.T_w_en_max_cs)
+    @add_con!(core, c75_cs, t.w_en_max_cs_ind => -t.dt * p_jt_cs[t.j_cs, t.t] for t in sc_data.T_w_en_max_cs)
 
     @add_con(core, c76_pr, e_w_plus_min_pr[w.w_en_min_pr_ind] - w.e_min for w in sc_data.W_en_min_pr; lcon = fill(-Inf, size(sc_data.W_en_min_pr)))
-    @add_con!(core, c76_pr_a, c76_pr, t.w_en_min_pr_ind => -t.dt * p_jt_pr[t.j_pr, t.t] for t in sc_data.T_w_en_min_pr)
+    @add_con!(core, c76_pr, t.w_en_min_pr_ind => -t.dt * p_jt_pr[t.j_pr, t.t] for t in sc_data.T_w_en_min_pr)
 
     @add_con(core, c76_cs, e_w_plus_min_cs[w.w_en_min_cs_ind] - w.e_min for w in sc_data.W_en_min_cs; lcon = fill(-Inf, size(sc_data.W_en_min_cs)))
-    @add_con!(core, c76_cs_a, c76_cs, t.w_en_min_cs_ind => -t.dt * p_jt_cs[t.j_cs, t.t] for t in sc_data.T_w_en_min_cs)
+    @add_con!(core, c76_cs, t.w_en_min_cs_ind => -t.dt * p_jt_cs[t.j_cs, t.t] for t in sc_data.T_w_en_min_cs)
 
     @add_con(core, c78_pr, z_w_en_max_pr[w.w_en_max_pr_ind] - sum(sc_data.c_e) * e_w_plus_max_pr[w.w_en_max_pr_ind] for w in sc_data.W_en_max_pr)
     @add_con(core, c78_cs, z_w_en_max_cs[w.w_en_max_cs_ind] - sum(sc_data.c_e) * e_w_plus_max_cs[w.w_en_max_cs_ind] for w in sc_data.W_en_max_cs)
@@ -463,16 +463,16 @@ function goc3_model(
 
     #4.6.9 Energy cost and value
     @add_con(core, c130_pr, p_jt_pr[pr.j_pr, pr.t] for pr in sc_data.prarray)
-    @add_con!(core, c130_pr_a, c130_pr, pr.j_pr + L_J_pr * (pr.t - 1) => -p_jtm_pr[pr.flat_k] for pr in sc_data.p_jtm_flattened_pr)
+    @add_con!(core, c130_pr, pr.j_pr + L_J_pr * (pr.t - 1) => -p_jtm_pr[pr.flat_k] for pr in sc_data.p_jtm_flattened_pr)
 
     @add_con(core, c130_cs, p_jt_cs[cs.j_cs, cs.t] for cs in sc_data.csarray)
-    @add_con!(core, c130_cs_a, c130_cs, cs.j_cs + L_J_cs * (cs.t - 1) => -p_jtm_cs[cs.flat_k] for cs in sc_data.p_jtm_flattened_cs)
+    @add_con!(core, c130_cs, cs.j_cs + L_J_cs * (cs.t - 1) => -p_jtm_cs[cs.flat_k] for cs in sc_data.p_jtm_flattened_cs)
 
     @add_con(core, c131_pr, z_jt_en_pr[pr.j_pr, pr.t] / pr.dt for pr in sc_data.prarray)
-    @add_con!(core, c131_pr_a, c131_pr, pr.j_pr + L_J_pr * (pr.t - 1) => -pr.c_en * p_jtm_pr[pr.flat_k] for pr in sc_data.p_jtm_flattened_pr)
+    @add_con!(core, c131_pr, pr.j_pr + L_J_pr * (pr.t - 1) => -pr.c_en * p_jtm_pr[pr.flat_k] for pr in sc_data.p_jtm_flattened_pr)
 
     @add_con(core, c131_cs, z_jt_en_cs[cs.j_cs, cs.t] / cs.dt for cs in sc_data.csarray)
-    @add_con!(core, c131_cs_a, c131_cs, cs.j_cs + L_J_cs * (cs.t - 1) => -cs.c_en * p_jtm_cs[cs.flat_k] for cs in sc_data.p_jtm_flattened_cs)
+    @add_con!(core, c131_cs, cs.j_cs + L_J_cs * (cs.t - 1) => -cs.c_en * p_jtm_cs[cs.flat_k] for cs in sc_data.p_jtm_flattened_cs)
 
     #4.7 Shunt devices
     @add_con(core, c132, p_jt_sh[sh.j_sh, sh.t] - g_jt_sh[sh.j_sh, sh.t] * v_it[sh.bus, sh.t]^2 for sh in sc_data.shuntarray)
@@ -538,24 +538,24 @@ function goc3_model(
         #4.9.4 Post-contingency real power balance
         
         @add_con(core, c162, p_t_sl[t] for t in 1:L_T)
-        @add_con!(core, c162_pr, c162, pr.t => -p_jt_pr[pr.j_pr, pr.t] for pr in sc_data.prarray)
-        @add_con!(core, c162_cs, c162, cs.t => p_jt_cs[cs.j_cs, cs.t] for cs in sc_data.csarray)
-        @add_con!(core, c162_sh, c162, sh.t => p_jt_sh[sh.j_sh, sh.t] for sh in sc_data.shuntarray)
+        @add_con!(core, c162, pr.t => -p_jt_pr[pr.j_pr, pr.t] for pr in sc_data.prarray)
+        @add_con!(core, c162, cs.t => p_jt_cs[cs.j_cs, cs.t] for cs in sc_data.csarray)
+        @add_con!(core, c162, sh.t => p_jt_sh[sh.j_sh, sh.t] for sh in sc_data.shuntarray)
 
         @add_con(core, c163, -p_t_sl[b.t] / I for b in sc_data.k_busarray)
 
-        @add_con!(core, c163_ln_fr, c163, ln.fr_bus + I * (ln.t - 1) + I * L_T * (ln.ctg - 1) => -p_jtk_ln[ln.flat_jtk_ln] for ln in sc_data.jtk_ln_flattened)
-        @add_con!(core, c163_ln_to, c163, ln.to_bus + I * (ln.t - 1) + I * L_T * (ln.ctg - 1) => p_jtk_ln[ln.flat_jtk_ln] for ln in sc_data.jtk_ln_flattened)
+        @add_con!(core, c163, ln.fr_bus + I * (ln.t - 1) + I * L_T * (ln.ctg - 1) => -p_jtk_ln[ln.flat_jtk_ln] for ln in sc_data.jtk_ln_flattened)
+        @add_con!(core, c163, ln.to_bus + I * (ln.t - 1) + I * L_T * (ln.ctg - 1) => p_jtk_ln[ln.flat_jtk_ln] for ln in sc_data.jtk_ln_flattened)
 
-        @add_con!(core, c163_xf_fr, c163, xf.fr_bus + I * (xf.t - 1) + I * L_T * (xf.ctg - 1) => -p_jtk_xf[xf.flat_jtk_xf] for xf in sc_data.jtk_xf_flattened)
-        @add_con!(core, c163_xf_to, c163, xf.to_bus + I * (xf.t - 1) + I * L_T * (xf.ctg - 1) => p_jtk_xf[xf.flat_jtk_xf] for xf in sc_data.jtk_xf_flattened)
+        @add_con!(core, c163, xf.fr_bus + I * (xf.t - 1) + I * L_T * (xf.ctg - 1) => -p_jtk_xf[xf.flat_jtk_xf] for xf in sc_data.jtk_xf_flattened)
+        @add_con!(core, c163, xf.to_bus + I * (xf.t - 1) + I * L_T * (xf.ctg - 1) => p_jtk_xf[xf.flat_jtk_xf] for xf in sc_data.jtk_xf_flattened)
 
-        @add_con!(core, c163_pr, c163, pr.bus + I * (pr.t - 1) + I * L_T * (pr.k - 1) => p_jt_pr[pr.j_pr, pr.t] for pr in sc_data.k_prarray)
-        @add_con!(core, c163_cs, c163, cs.bus + I * (cs.t - 1) + I * L_T * (cs.k - 1) => -p_jt_cs[cs.j_cs, cs.t] for cs in sc_data.k_csarray)
-        @add_con!(core, c163_sh, c163, sh.bus + I * (sh.t - 1) + I * L_T * (sh.k - 1) => -p_jt_sh[sh.j_sh, sh.t] for sh in sc_data.k_shuntarray)
+        @add_con!(core, c163, pr.bus + I * (pr.t - 1) + I * L_T * (pr.k - 1) => p_jt_pr[pr.j_pr, pr.t] for pr in sc_data.k_prarray)
+        @add_con!(core, c163, cs.bus + I * (cs.t - 1) + I * L_T * (cs.k - 1) => -p_jt_cs[cs.j_cs, cs.t] for cs in sc_data.k_csarray)
+        @add_con!(core, c163, sh.bus + I * (sh.t - 1) + I * L_T * (sh.k - 1) => -p_jt_sh[sh.j_sh, sh.t] for sh in sc_data.k_shuntarray)
 
-        @add_con!(core, c163_dc_fr, c163, dc.fr_bus + I * (dc.t - 1) + I * L_T * (dc.ctg - 1) => -p_jt_fr_dc[dc.j_dc, dc.t] for dc in sc_data.jtk_dc_flattened)
-        @add_con!(core, c163_dc_to, c163, dc.to_bus + I * (dc.t - 1) + I * L_T * (dc.ctg - 1) => -p_jt_fr_dc[dc.j_dc, dc.t] for dc in sc_data.jtk_dc_flattened)
+        @add_con!(core, c163, dc.fr_bus + I * (dc.t - 1) + I * L_T * (dc.ctg - 1) => -p_jt_fr_dc[dc.j_dc, dc.t] for dc in sc_data.jtk_dc_flattened)
+        @add_con!(core, c163, dc.to_bus + I * (dc.t - 1) + I * L_T * (dc.ctg - 1) => -p_jt_fr_dc[dc.j_dc, dc.t] for dc in sc_data.jtk_dc_flattened)
         
     end
 
@@ -827,7 +827,7 @@ function goc3_model(
                     c163=c163)
         end
 
-        vars2, cons2 = user_callback(core, vars, cons)
+        core, vars2, cons2 = user_callback(core, vars, cons)
         model =ExaModel(core; kwargs...)
 
         vars = (;vars..., vars2...)

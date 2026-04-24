@@ -68,24 +68,15 @@ elec_scale = 5
 elec_curve = [1, .9, .95]
 
 function add_electrolyzers(core, vars, cons)
-    p_elec = variable(core, size(elec_data, 1),
-    size(elec_data, 2); lvar = elec_min, uvar = elec_max)
-    o2 = objective(core,
-    e.cost*p_elec[e.i, e.t] for e in elec_data)
-    c_elec_power_balance = constraint!(core,
-    cons.c_active_power_balance,
-    e.bus + Nbus*(e.t-1) => p_elec[e.i, e.t]
-    for e in elec_data)
-    c_elec_ramp = constraint(core,
-    p_elec[e.i, e.t] - p_elec[e.i, e.t - 1]
-    for e in elec_data[:, 2:Ntime];
-    lcon = fill!(similar(elec_data, Float64,
-    length(elec_data)), -elec_scale),
-    ucon = fill!(similar(elec_data, Float64,
-    length(elec_data)), elec_scale))
+    @add_var(core, p_elec, size(elec_data, 1), size(elec_data, 2); lvar = elec_min, uvar = elec_max)
+    @add_obj(core, o2, e.cost * p_elec[e.i, e.t] for e in elec_data)
+    @add_con!(core, cons.c_active_power_balance, e.bus + Nbus * (e.t - 1) => p_elec[e.i, e.t] for e in elec_data)
+    @add_con(core, c_elec_ramp, p_elec[e.i, e.t] - p_elec[e.i, e.t - 1] for e in elec_data[:, 2:Ntime]; 
+    lcon = fill!(similar(elec_data, Float64, length(elec_data)), -elec_scale), ucon = fill!(similar(elec_data, Float64, length(elec_data)), elec_scale))
+    
     vars = (p_elec=p_elec,)
     cons = (c_elec_ramp=c_elec_ramp,)
-    return vars, cons
+    return core, vars, cons
 end
 
 PowerModels.silence()
