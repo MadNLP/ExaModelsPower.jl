@@ -533,7 +533,7 @@ function goc3_model(
         c163_cs = constraint!(core, c163, cs.bus + I*(cs.t-1) + I*L_T*(cs.k-1) => -p_jt_cs[cs.j_cs, cs.t] for cs in sc_data.k_csarray)
         c163_sh = constraint!(core, c163, sh.bus + I*(sh.t-1) + I*L_T*(sh.k-1) => -p_jt_sh[sh.j_sh, sh.t] for sh in sc_data.k_shuntarray)
         c163_dc_fr = constraint!(core, c163, dc.fr_bus + I*(dc.t-1) + I*L_T*(dc.ctg-1) => -p_jt_fr_dc[dc.j_dc, dc.t] for dc in sc_data.jtk_dc_flattened)
-        c163_dc_to = constraint!(core, c163, dc.to_bus + I*(dc.t-1) + I*L_T*(dc.ctg-1) => -p_jt_fr_dc[dc.j_dc, dc.t] for dc in sc_data.jtk_dc_flattened)
+        c163_dc_to = constraint!(core, c163, dc.to_bus + I*(dc.t-1) + I*L_T*(dc.ctg-1) => p_jt_to_dc[dc.j_dc, dc.t] for dc in sc_data.jtk_dc_flattened)
         
     end
 
@@ -647,7 +647,7 @@ function goc3_model(
             z_nt_scr = z_nt_scr,
             z_nt_nsc = z_nt_nsc,
             z_nt_rru = z_nt_rru,
-            z_nt_rrd = z_nt_rru,
+            z_nt_rrd = z_nt_rrd,
             z_nt_qru = z_nt_qru,
             z_nt_qrd = z_nt_qrd,
             θ_it = θ_it,
