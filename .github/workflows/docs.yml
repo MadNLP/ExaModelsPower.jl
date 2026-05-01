@@ -13,7 +13,7 @@ jobs:
       labels: cuda
     strategy:
       matrix:
-        julia-version: ['lts', '1']
+        julia-version: ['lts']
     steps:
       - uses: actions/checkout@v4
       - uses: julia-actions/install-juliaup@v2
