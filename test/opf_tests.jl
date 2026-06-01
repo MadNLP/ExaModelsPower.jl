@@ -1,3 +1,13 @@
+# MadNLP's defaults (SparseKKTSystem + MUMPS) are CPU-only and cannot assemble the KKT
+# matrix from device arrays. On a CUDA backend, solve the condensed system with cuDSS on
+# the GPU instead; on the CPU (nothing/CPU()) the defaults are fine.
+function exasolve(model, backend; kwargs...)
+    opts = backend isa CUDABackend ?
+        (; kkt_system = MadNLP.SparseCondensedKKTSystem, linear_solver = MadNLPGPU.CUDSSSolver) :
+        (;)
+    return madnlp(model; opts..., kwargs...)
+end
+
 function test_case3(result, result_pm, result_nlp_pm, pg, qg, p, q)
     test_static_case(result, result_pm, result_nlp_pm, pg, qg)
 
@@ -70,7 +80,7 @@ function sc_tests(filename, backend, T)
     uc_filename = filename*"_solution.json"
     filename = filename*".json"
     model, cons, vars, lengths, sc_data_array = ExaModelsPower.goc3_model(filename, uc_filename; backend=backend, T=T)
-    result = madnlp(model; max_iter=5, tol=1e-2)
+    result = exasolve(model, backend; max_iter=5, tol=1e-2)
 end
 
 function test_dcopf_case(result, result_pm, pg, pf)

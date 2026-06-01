@@ -1,14 +1,14 @@
 convert_data(data::N, backend) where {names,N<:NamedTuple{names}} =
     NamedTuple{names}(convert_array(d, backend) for d in data)
 
-function parse_ac_power_data(filename)
+function parse_ac_power_data(filename, T = Float64)
     _, f = splitdir(filename)
     name, _ = splitext(f)
 
     @info "Loading matpower file"
 
     library = isfile(filename) ? nothing : :pglib
-    data = ExaPowerIO.parse_matpower(filename; library)
+    data = ExaPowerIO.parse_matpower(T, filename; library)
 
     data = (
         baseMVA = [data.baseMVA],

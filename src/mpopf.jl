@@ -1,6 +1,6 @@
-function parse_mp_power_data(filename, N, corrective_action_ratio)
+function parse_mp_power_data(filename, N, corrective_action_ratio, T = Float64)
 
-    data = parse_ac_power_data(filename)
+    data = parse_ac_power_data(filename, T)
 
     nbus = length(data.bus)
 
@@ -421,7 +421,7 @@ function mpopf_model(
 )
 
     @assert length(curve) > 0
-    data = parse_mp_power_data(filename, N, corrective_action_ratio)
+    data = parse_mp_power_data(filename, N, corrective_action_ratio, T)
     update_load_data(data.busarray, curve)
     data = convert_data(data,backend)
     Nbus = size(data.bus, 1)
@@ -447,7 +447,7 @@ function mpopf_model(
     kwargs...,
 )
 
-    data = parse_mp_power_data(filename, N, corrective_action_ratio)
+    data = parse_mp_power_data(filename, N, corrective_action_ratio, T)
     update_load_data(data.busarray, pd, qd, data.baseMVA[])
     data = convert_data(data,backend)
     Nbus = size(data.bus, 1)
@@ -473,7 +473,7 @@ function mpopf_model(
 )
 
     @assert length(curve) > 0
-    data = parse_mp_power_data(filename, N, corrective_action_ratio)
+    data = parse_mp_power_data(filename, N, corrective_action_ratio, T)
     update_load_data(data.busarray, curve)
     data = convert_data(data,backend)
     Nbus = size(data.bus, 1)
@@ -500,7 +500,7 @@ function mpopf_model(
 )
 
 
-    data = parse_mp_power_data(filename, N, corrective_action_ratio)
+    data = parse_mp_power_data(filename, N, corrective_action_ratio, T)
     update_load_data(data.busarray, pd, qd, data.baseMVA[])
     data = convert_data(data,backend)
     Nbus = size(data.bus, 1)
