@@ -27,7 +27,7 @@ function update_load_data(busarray, curve)
         for x in 1:size(busarray, 1)
             b = busarray[x, t]
             busarray[x, t] = (
-                b=ExaPowerIO.BusData(
+                b=ExaPowerIO.BusData{typeof(b.b.pd)}(
                     b.b.i,
                     b.b.bus_i,
                     b.b.type,
@@ -53,7 +53,7 @@ function update_load_data(busarray, pd, qd, baseMVA)
     for (idx ,pd_t) in pairs(pd)
         b = busarray[idx[1], idx[2]]
         busarray[idx[1], idx[2]] = (
-            b=ExaPowerIO.BusData(
+            b=ExaPowerIO.BusData{typeof(b.b.pd)}(
                 b.b.i,
                 b.b.bus_i,
                 b.b.type,
