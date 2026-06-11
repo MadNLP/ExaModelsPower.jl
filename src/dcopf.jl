@@ -1,6 +1,6 @@
 function build_dcopf(data, user_callback; backend = nothing, T = Float64, core = nothing, kwargs...)
 
-    core = isnothing(core) ? ExaCore(T; backend = backend) : core
+    core = isnothing(core) ? legacy_core(T, backend) : core
     T, backend = typeof(core).parameters[1], core.backend
 
     va = variable(core, length(data.bus))

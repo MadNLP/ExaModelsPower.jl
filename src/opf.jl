@@ -3,7 +3,7 @@ function dummy_extension(core, vars, cons)
 end
 
 function build_polar_opf(data, user_callback; backend = nothing, T=Float64, kwargs...)
-    core = ExaCore(T; backend = backend)
+    core = legacy_core(T, backend)
 
     va = variable(core, length(data.bus);)
     vm = variable(
@@ -97,7 +97,7 @@ function build_polar_opf(data, user_callback; backend = nothing, T=Float64, kwar
 end
 
 function build_rect_opf(data, user_callback; backend = nothing, T=Float64, kwargs...)
-    core = ExaCore(T; backend = backend)
+    core = legacy_core(T, backend)
 
     vr = variable(core, length(data.bus), start = fill!(similar(data.bus, Float64), 1.0))
     vim = variable(core, length(data.bus))

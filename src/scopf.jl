@@ -22,7 +22,7 @@ function goc3_model(
     sc_data_array = sc_data
     sc_data = convert_data(sc_data, backend)
 
-    core = ExaCore(T; backend =backend)
+    core = legacy_core(T, backend)
 
     if result_set != []
         initialize_vars = true
