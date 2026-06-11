@@ -55,7 +55,7 @@ function build_dcopf(data, user_callback; backend = nothing, T = Float64, core =
 
 
     vars2, cons2 = user_callback(core, vars, cons)
-    model =ExaModel(core; kwargs...)
+    model = ExaModel(core; prod = true, kwargs...)
 
     vars = (;vars..., vars2...)
     cons = (;cons..., cons2...)

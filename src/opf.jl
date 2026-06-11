@@ -88,7 +88,7 @@ function build_polar_opf(data, user_callback; backend = nothing, T=Float64, kwar
     )
 
     vars2, cons2 = user_callback(core, vars, cons)
-    model =ExaModel(core; kwargs...)
+    model = ExaModel(core; prod = true, kwargs...)
 
     vars = (;vars..., vars2...)
     cons = (;cons..., cons2...)
@@ -186,7 +186,7 @@ function build_rect_opf(data, user_callback; backend = nothing, T=Float64, kwarg
     )
 
     vars2, cons2 = user_callback(core, vars, cons)
-    model =ExaModel(core; kwargs...)
+    model = ExaModel(core; prod = true, kwargs...)
 
     vars = (;vars..., vars2...)
     cons = (;cons..., cons2...)

@@ -235,7 +235,7 @@ function build_mpopf(data, Nbus, N, form, user_callback; backend = nothing, T = 
     end
 
     vars2, cons2 = user_callback(core, vars, cons)
-    model =ExaModel(core; kwargs...)
+    model = ExaModel(core; prod = true, kwargs...)
 
     vars = (;vars..., vars2...)
     cons = (;cons..., cons2...)
@@ -255,7 +255,7 @@ function build_mpopf(data, Nbus, N, discharge_func::Function, form, user_callbac
     end
 
     vars2, cons2 = user_callback(core, vars, cons)
-    model =ExaModel(core; kwargs...)
+    model = ExaModel(core; prod = true, kwargs...)
 
     vars = (;vars..., vars2...)
     cons = (;cons..., cons2...)

@@ -807,7 +807,7 @@ function goc3_model(
         end
 
         vars2, cons2 = user_callback(core, vars, cons)
-        model =ExaModel(core; kwargs...)
+        model = ExaModel(core; prod = true, kwargs...)
 
         vars = (;vars..., vars2...)
         cons = (;cons..., cons2...)
