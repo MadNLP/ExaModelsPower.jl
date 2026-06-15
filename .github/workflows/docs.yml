@@ -13,14 +13,12 @@ jobs:
       labels: cuda
     strategy:
       matrix:
-        julia-version: ['1.11']
+        julia-version: ['1']
     steps:
       - uses: actions/checkout@v4
       - uses: julia-actions/install-juliaup@v2
         with:
           channel: ${{ matrix.julia-version }}
-      - name: Cache Julia artifacts
-        uses: actions/cache@v3
       - name: Instantiate the dependencies
         shell: julia --project=docs/ --color=yes {0}
         run: |

@@ -17,15 +17,13 @@ jobs:
       labels: cuda
     strategy:
       matrix:
-        julia-version: ['1.11']
+        julia-version: ['1']
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
       - uses: julia-actions/install-juliaup@v2
         with:
           channel: ${{ matrix.julia-version }}
-      - name: Cache Julia artifacts
-        uses: actions/cache@v3
       - name: Run tests
         shell: julia --project=. --color=yes {0}
         run: |
@@ -37,5 +35,5 @@ jobs:
           directories: src
       - uses: codecov/codecov-action@v5
         with:
-          file: lcov.info
+          files: lcov.info
           token: ${{ secrets.CODECOV_TOKEN }}

@@ -5,8 +5,8 @@
 # The latest version of ExaModelsPower can be installed in julia as so. Additionally, in order to develop models that can be solved on the GPU, CUDA is required. 
 using ExaModelsPower, CUDA
 
-# In order to solve the ExaModels developed by ExaModelsPower, an NLP solver is required. ExaModels is compatible with MadNLP and Ipopt, but this tutorial will focus on MadNLP to demonstrate GPU solving capabilities.
-using MadNLP, MadNLPGPU #, NLPModelsIpopt 
+# In order to solve the ExaModels developed by ExaModelsPower, an NLP solver is required. ExaModels is compatible with MadNLP and Ipopt, but this tutorial will focus on MadNLP to demonstrate GPU solving capabilities. CUDSS is loaded so MadNLP's CUDA extension activates and the default GPU linear solver becomes available.
+using MadNLP, MadNLPGPU, CUDSS #, NLPModelsIpopt
 
 # Finally, we install ExaModels to allow solved models to be unpacked.
 using ExaModels
