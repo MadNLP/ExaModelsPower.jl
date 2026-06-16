@@ -222,7 +222,7 @@ function ac_opf_model(
     kwargs...,
 )
 
-    data = parse_ac_power_data(filename)
+    data = parse_ac_power_data(filename, T)
     data = convert_data(data, backend)
 
     if form == :polar

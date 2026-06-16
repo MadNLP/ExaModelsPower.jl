@@ -1,6 +1,6 @@
-function parse_mp_power_data(filename, N, corrective_action_ratio)
+function parse_mp_power_data(filename, N, corrective_action_ratio, T = Float64)
 
-    data = parse_ac_power_data(filename)
+    data = parse_ac_power_data(filename, T)
 
     nbus = length(data.bus)
 
@@ -27,7 +27,7 @@ function update_load_data(busarray, curve)
         for x in 1:size(busarray, 1)
             b = busarray[x, t]
             busarray[x, t] = (
-                b=ExaPowerIO.BusData(
+                b=ExaPowerIO.BusData{typeof(b.b.pd)}(
                     b.b.i,
                     b.b.bus_i,
                     b.b.type,
@@ -53,7 +53,7 @@ function update_load_data(busarray, pd, qd, baseMVA)
     for (idx ,pd_t) in pairs(pd)
         b = busarray[idx[1], idx[2]]
         busarray[idx[1], idx[2]] = (
-            b=ExaPowerIO.BusData(
+            b=ExaPowerIO.BusData{typeof(b.b.pd)}(
                 b.b.i,
                 b.b.bus_i,
                 b.b.type,
@@ -421,7 +421,7 @@ function mpopf_model(
 )
 
     @assert length(curve) > 0
-    data = parse_mp_power_data(filename, N, corrective_action_ratio)
+    data = parse_mp_power_data(filename, N, corrective_action_ratio, T)
     update_load_data(data.busarray, curve)
     data = convert_data(data,backend)
     Nbus = size(data.bus, 1)
@@ -447,7 +447,7 @@ function mpopf_model(
     kwargs...,
 )
 
-    data = parse_mp_power_data(filename, N, corrective_action_ratio)
+    data = parse_mp_power_data(filename, N, corrective_action_ratio, T)
     update_load_data(data.busarray, pd, qd, data.baseMVA[])
     data = convert_data(data,backend)
     Nbus = size(data.bus, 1)
@@ -473,7 +473,7 @@ function mpopf_model(
 )
 
     @assert length(curve) > 0
-    data = parse_mp_power_data(filename, N, corrective_action_ratio)
+    data = parse_mp_power_data(filename, N, corrective_action_ratio, T)
     update_load_data(data.busarray, curve)
     data = convert_data(data,backend)
     Nbus = size(data.bus, 1)
@@ -500,7 +500,7 @@ function mpopf_model(
 )
 
 
-    data = parse_mp_power_data(filename, N, corrective_action_ratio)
+    data = parse_mp_power_data(filename, N, corrective_action_ratio, T)
     update_load_data(data.busarray, pd, qd, data.baseMVA[])
     data = convert_data(data,backend)
     Nbus = size(data.bus, 1)
