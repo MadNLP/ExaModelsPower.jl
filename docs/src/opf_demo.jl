@@ -21,7 +21,7 @@ model, vars, cons = ac_opf_model(
 model
 
 # Once the model is built, we can generate a solution using MadNLP.
-result = madnlp(model; tol=1e-6)
+result = madnlp(model; tol=1e-6, kkt_system = MadNLP.SparseCondensedKKTSystem, linear_solver = MadNLPGPU.CUDSSSolver)
 
 # Once a solution has been generated, the values of any of the variables in the model can be unpacked using the vars NamedTuple.
 solution(result, vars.vm)[1:10]
