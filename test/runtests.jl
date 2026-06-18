@@ -249,9 +249,6 @@ function runtests()
 
         end
 
-        # GOC3 is a single ~140k-variable smoke test whose CPU solve dominates CI runtime.
-        # The (T, backend) variants of the same CPU solve add no coverage, so run it once on
-        # CPU and once on GPU (when available) instead of once per CONFIG.
         goc3_configs = [(Float64, nothing)]
         if CUDA.has_cuda_gpu()
             push!(goc3_configs, (Float64, CUDABackend()))

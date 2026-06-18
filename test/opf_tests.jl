@@ -82,9 +82,6 @@ function sc_tests(filename, backend, T)
     uc_filename = filename*"_solution.json"
     filename = filename*".json"
     model, cons, vars, lengths, sc_data_array = ExaModelsPower.goc3_model(filename, uc_filename; backend=backend, T=T)
-    # Smoke test only (no assertions on `result`): the full GOC3 case is ~140k variables and
-    # never converges in CI, so one step is enough to exercise build + KKT assembly + a
-    # factorization. The CPU UMFPACK factorization dominates wall time, so keep max_iter at 1.
     result = exasolve(model, backend; max_iter=1, tol=1e-2)
 end
 
