@@ -235,10 +235,6 @@ function runtests()
                 end
             end
 
-            @testset "GOC3, $(T), $(backend)" begin
-                sc_tests("../data/C3E4N00073D1_scenario_303", backend, T)
-            end
-
             @testset "User callback, $(T), $(backend)" begin
                 model, vars, cons = mpopf_model(
                     "../data/pglib_opf_case3_lmbd_mod.m", elec_curve;
@@ -251,6 +247,19 @@ function runtests()
                     user_callback = add_electrolyzers, T=T, backend=backend)
             end
 
+        end
+
+        # GOC3 is a single ~140k-variable smoke test whose CPU solve dominates CI runtime.
+        # The (T, backend) variants of the same CPU solve add no coverage, so run it once on
+        # CPU and once on GPU (when available) instead of once per CONFIG.
+        goc3_configs = [(Float64, nothing)]
+        if CUDA.has_cuda_gpu()
+            push!(goc3_configs, (Float64, CUDABackend()))
+        end
+        for (T, backend) in goc3_configs
+            @testset "GOC3, $(T), $(backend)" begin
+                sc_tests("../data/C3E4N00073D1_scenario_303", backend, T)
+            end
         end
     end
 end
