@@ -1,3 +1,15 @@
+# On a CUDA backend, MadNLP's defaults (SparseKKTSystem + MUMPS) are CPU-only and cannot
+# assemble the KKT matrix from device arrays, so solve the condensed system with cuDSS on
+# the GPU. On the CPU, pin the linear solver to Umfpack: MadNLP 0.10 changed the sparse
+# default to MUMPS, which drives these OPFs into restoration, whereas Umfpack (the default
+# through MadNLP 0.8, and what main uses) converges cleanly.
+function exasolve(model, backend; kwargs...)
+    opts = backend isa CUDABackend ?
+        (; kkt_system = MadNLP.SparseCondensedKKTSystem, linear_solver = MadNLPGPU.CUDSSSolver) :
+        (; linear_solver = MadNLP.UmfpackSolver)
+    return madnlp(model; opts..., kwargs...)
+end
+
 function test_case3(result, result_pm, result_nlp_pm, pg, qg, p, q)
     test_static_case(result, result_pm, result_nlp_pm, pg, qg)
 
@@ -70,7 +82,7 @@ function sc_tests(filename, backend, T)
     uc_filename = filename*"_solution.json"
     filename = filename*".json"
     model, cons, vars, lengths, sc_data_array = ExaModelsPower.goc3_model(filename, uc_filename; backend=backend, T=T)
-    result = madnlp(model; max_iter=5, tol=1e-2)
+    result = exasolve(model, backend; max_iter=5, tol=1e-2)
 end
 
 function test_dcopf_case(result, result_pm, pg, pf)

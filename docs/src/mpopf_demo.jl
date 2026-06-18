@@ -12,7 +12,7 @@ model, vars, cons = mpopf_model(
     backend = CUDABackend(),
     corrective_action_ratio = 0.3
 )
-result = madnlp(model; tol=1e-6)
+result = madnlp(model; tol=1e-6, kkt_system = MadNLP.SparseCondensedKKTSystem, linear_solver = MadNLPGPU.CUDSSSolver)
 
 # If the user would like to provide more complex demand profiles, they can provide their own input files. The number of rows in each input file should match the number of buses in the static OPF datafile, and the number of columns will dictate the number of time periods in the MP model.
 # First, download the example load profile datafiles.
@@ -45,7 +45,7 @@ model, vars, cons = mpopf_model(
 )
 
 #Solve
-result = madnlp(model; tol=1e-6)
+result = madnlp(model; tol=1e-6, kkt_system = MadNLP.SparseCondensedKKTSystem, linear_solver = MadNLPGPU.CUDSSSolver)
 
 ## MPOPF with storage
 # The MPOPF model can also be constructed with storage considerations. We model storage using the model proposed in __[Geth, Coffrin, Fobes 2020](https://arxiv.org/pdf/2004.14768)__. This requires inputting a modified datafile containing storage parameters. When modeling MPOPF with storage, all of the aforementioned tuneable parameters are still available. We also allow the user to specify whether or not to model the charging/discharging complementarity constraint. This is set to false by default to avoid potential numerical error.
@@ -70,7 +70,7 @@ model, vars, cons = mpopf_model(
     backend = CUDABackend(),
     storage_complementarity_constraint = false
 )
-result = madnlp(model; tol=1e-6)
+result = madnlp(model; tol=1e-6, kkt_system = MadNLP.SparseCondensedKKTSystem, linear_solver = MadNLPGPU.CUDSSSolver)
 result.objective
 
 # ExaModelsPower also provides a secondary option to avoid dealing with complementarity constraints. The user can specify a function that computesloss in battery level as a smooth function of discharge rate and the storage devices thermal rating parameter. We provide an arbitrary example function to demonstrate the modeling capability.
@@ -88,7 +88,7 @@ model, vars, cons = mpopf_model(
     backend = CUDABackend(),
     storage_complementarity_constraint = false
 )
-result = madnlp(model; tol=1e-6)
+result = madnlp(model; tol=1e-6, kkt_system = MadNLP.SparseCondensedKKTSystem, linear_solver = MadNLPGPU.CUDSSSolver)
 result.objective
 
 # Despite the example discharge function being generated somewhat arbitrarily, the resultant objective values remain quite close for both the smooth and piecewise charge/discharge functions.
