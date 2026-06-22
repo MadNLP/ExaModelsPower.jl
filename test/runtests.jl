@@ -249,7 +249,7 @@ function runtests()
 
         end
 
-        goc3_configs = [(Float64, nothing)]
+        goc3_configs = Tuple{DataType, Any}[(Float64, nothing)]
         if CUDA.has_cuda_gpu()
             push!(goc3_configs, (Float64, CUDABackend()))
         end
