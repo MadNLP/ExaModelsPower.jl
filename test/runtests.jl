@@ -2,7 +2,7 @@ using Test, ExaModelsPower, MadNLP, MadNLPGPU, KernelAbstractions, CUDA, CUDSS, 
 
 include("opf_tests.jl")
 
-const CONFIGS = [
+const CONFIGS = Any[
     nothing,
     CPU(),
 ]
