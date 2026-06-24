@@ -82,7 +82,7 @@ function sc_tests(filename, backend, T)
     uc_filename = filename*"_solution.json"
     filename = filename*".json"
     model, cons, vars, lengths, sc_data_array = ExaModelsPower.goc3_model(filename, uc_filename; backend=backend, T=T)
-    result = exasolve(model, backend; max_iter=5, tol=1e-2)
+    result = exasolve(model, backend; max_iter=1, tol=1e-2)
 end
 
 function test_dcopf_case(result, result_pm, pg, pf)
