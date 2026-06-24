@@ -8,6 +8,7 @@ import NLPModels
 
 include("opf_tests.jl")
 include("recipe_tests.jl")
+include("scopf_tests.jl")
 
 # CI runs each backend, and the GOC3 smoke test, as a separate job, so the wall clock is
 # the slowest of them rather than their sum (they were 13.0, 14.8, 21.5 and 74.9 min in run
@@ -272,6 +273,9 @@ function runtests()
                 sc_tests("../data/C3E4N00073D1_scenario_303", nothing, Float64)
             end
         end
+
+        # N-1 SCOPF: CPU :single vs CPU/GPU :twostage agreement on case9.
+        scopf_tests()
     end
 end
 

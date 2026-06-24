@@ -1,6 +1,7 @@
 module ExaModelsPower
 
 import ExaModels: ExaModels, ExaCore, @add_var, @add_par, @add_con, @add_obj, @add_con!, ExaModel, convert_array, solution
+import ExaModels: TwoStageExaCore, EachScenario, get_var_scen, get_con_scen, get_nscen
 using DelimitedFiles
 using ExaPowerIO
 using JSON
@@ -14,6 +15,8 @@ include("sc_parser.jl")       #   "
 include("opf.jl")             # static: polar, rect, DC
 include("mpopf.jl")           # multi-period: polar, rect, DC
 include("goc3.jl")            # security-constrained, GOC3 formulation
+include("scopf_simple.jl")    # security-constrained, N-1: monolithic
+include("scopf_twostage.jl")  # security-constrained, N-1: two-stage Schur
 
 const NAMES = filter(names(@__MODULE__; all = true)) do x
     str = string(x)
