@@ -1,6 +1,7 @@
 using Test, ExaModelsPower, MadNLP, MadNLPGPU, KernelAbstractions, CUDA, CUDSS, PowerModels, Ipopt, JuMP, ExaModels, NLPModelsJuMP
 
 include("opf_tests.jl")
+include("scopf_tests.jl")
 
 const CONFIGS = Any[
     nothing,
@@ -264,6 +265,9 @@ function runtests()
                 sc_tests("../data/C3E4N00073D1_scenario_303", backend, T)
             end
         end
+
+        # N-1 SCOPF: CPU :single vs CPU/GPU :twostage agreement on case9.
+        scopf_tests()
     end
 end
 
