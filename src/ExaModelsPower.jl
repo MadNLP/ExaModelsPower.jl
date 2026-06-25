@@ -4,6 +4,7 @@ import ExaModels: ExaModels, ExaCore, variable, parameter, constraint, ExaModel,
 using DelimitedFiles
 using ExaPowerIO
 using JSON
+using PowerIO
 
 include("parser.jl")
 include("constraint.jl")
