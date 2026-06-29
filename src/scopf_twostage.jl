@@ -116,7 +116,7 @@ end
 
 Two-stage form of the hard-constrained N-1 SCOPF (`scopf_model`), built on
 `TwoStageExaCore` from ExaModels.jl so it can be solved with MadNLP's
-`SchurComplementKKTSystem`, which factorizes the per-contingency block structure
+`SchurComplementCondensedKKTSystem`, which factorizes the per-contingency block structure
 in parallel.
 
 Same physics as `scopf_model` (`scopf_simple.jl`): full AC power balance, branch
@@ -146,7 +146,7 @@ interleaved here, not contiguous):
 using MadNLP, MadNLPGPU, CUDA, CUDSS
 model, vars, cons, info = scopf_twostage_model(case, conts; backend = CUDABackend())
 result = madnlp(model;
-    kkt_system    = SchurComplementKKTSystem,
+    kkt_system    = SchurComplementCondensedKKTSystem,
     linear_solver = MadNLPGPU.CUDSSSolver,
     kkt_options   = Dict(:schur_ns => info.ns, :schur_nv => info.nv,
                          :schur_nd => info.nd, :schur_nc => info.nc,
@@ -156,7 +156,7 @@ result = madnlp(model;
 
 !!! note "Design-only base-case constraints"
     The base-case physics are first-stage (design) constraints — `nc_design` of them,
-    reported in `post_solve_info`. `SchurComplementKKTSystem` folds the design equalities
+    reported in `post_solve_info`. `SchurComplementCondensedKKTSystem` folds the design equalities
     into the bordered first-stage block and condenses the design inequalities into it, so
     this two-stage model and the monolithic `scopf_model` converge to the same optimum.
     The base case produces these rows by construction — they are deliberately NOT worked
@@ -327,7 +327,7 @@ function scopf_twostage_model(
     end
 
     # Schur dimensions AND the full per-variable/per-constraint scenario tags.
-    # MadNLP's SchurComplementKKTSystem partitions by these tags (design and
+    # MadNLP's SchurComplementCondensedKKTSystem partitions by these tags (design and
     # scenario variables are interleaved here, not contiguous), and folds the
     # design-only base-case constraints into its first-stage bordered block.
     # Pass them through `kkt_options` as :schur_var_scen / :schur_con_scen.

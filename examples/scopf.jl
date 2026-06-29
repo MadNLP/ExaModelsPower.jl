@@ -8,7 +8,7 @@
 #                                      (cuDSS condensed on GPU).
 #   :twostage  scopf_twostage_model — TwoStageExaCore (base case = first stage,
 #                                      each contingency = a scenario); solved with
-#                                      MadNLP's SchurComplementKKTSystem.
+#                                      MadNLP's SchurComplementCondensedKKTSystem.
 #   :compare   solve BOTH and assert they reach the same objective and base-case
 #              dispatch (the two formulations are mathematically identical).
 #
@@ -183,7 +183,7 @@ elseif mode == :twostage
     result = solve_with_retry() do
         madnlp(model;
             callback = MadNLP.SparseCallback,
-            kkt_system = MadNLP.SchurComplementKKTSystem,
+            kkt_system = MadNLP.SchurComplementCondensedKKTSystem,
             linear_solver = lin,
             kkt_options = kkt_opts,
             inertia_correction_method = inertia,
@@ -214,7 +214,7 @@ elseif mode == :compare
     lin = backend === nothing ? MadNLP.MumpsSolver : MadNLPGPU.CUDSSSolver
     r2 = madnlp(m2;
         callback = MadNLP.SparseCallback,
-        kkt_system = MadNLP.SchurComplementKKTSystem,
+        kkt_system = MadNLP.SchurComplementCondensedKKTSystem,
         linear_solver = lin,
         kkt_options = schur_kkt_options(info, backend, cudss_ir),
         inertia_correction_method = inertia,

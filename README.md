@@ -90,21 +90,21 @@ result = madnlp(model;
 #### Two-stage / Schur form
 
 `scopf_twostage_model` builds the same problem on a `TwoStageExaCore` (base case = first stage,
-each contingency = a scenario) so it can be solved with MadNLP's `SchurComplementKKTSystem`,
+each contingency = a scenario) so it can be solved with MadNLP's `SchurComplementCondensedKKTSystem`,
 which factorizes the per-contingency blocks in parallel. It returns an extra `post_solve_info`
 NamedTuple with the Schur dimensions:
 
 ```julia
 model, vars, cons, info = scopf_twostage_model("case118.m", contingencies; backend = CUDABackend())
 result = madnlp(model;
-    kkt_system    = SchurComplementKKTSystem,
+    kkt_system    = SchurComplementCondensedKKTSystem,
     linear_solver = MadNLPGPU.CUDSSSolver,
     kkt_options   = Dict(:schur_ns => info.ns, :schur_nv => info.nv,
                          :schur_nd => info.nd, :schur_nc => info.nc))
 ```
 
 > **Note.** The base-case physics are first-stage *design* constraints. The current
-> `SchurComplementKKTSystem` does not yet support design-only constraint rows (solving asserts
+> `SchurComplementCondensedKKTSystem` does not yet support design-only constraint rows (solving asserts
 > `m == ns*nc`, off by exactly `info.nc_design`). The model is structurally correct; the Schur
 > solve is gated on upstream support for design-only constraints.
 
