@@ -15,7 +15,7 @@
 # condensed-KKT GPU path can report success at a power-balance-infeasible point (see
 # SCOPF-GPU-TWOSTAGE-FINDINGS.md / CLAUDE.md), so it is not a trustworthy reference.
 
-# Build the SchurComplementKKTSystem kkt_options from the model's post_solve_info
+# Build the SchurComplementCondensedKKTSystem kkt_options from the model's post_solve_info
 # tags (MadNLP can't auto-detect ExaModels' interleaved design/scenario tag names).
 function scopf_schur_kkt_options(info)
     return Dict{Symbol,Any}(
@@ -42,7 +42,7 @@ function solve_scopf_twostage(case, contingencies, backend; inertia = MadNLP.Ine
     lin = backend isa CUDABackend ? MadNLPGPU.CUDSSSolver : MadNLP.MumpsSolver
     result = madnlp(model;
         callback = MadNLP.SparseCallback,
-        kkt_system = MadNLP.SchurComplementKKTSystem,
+        kkt_system = MadNLP.SchurComplementCondensedKKTSystem,
         linear_solver = lin,
         kkt_options = scopf_schur_kkt_options(info),
         inertia_correction_method = inertia,
