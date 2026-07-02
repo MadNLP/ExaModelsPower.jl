@@ -17,6 +17,15 @@ MadNLP = "0.10"
 MadNLPGPU = "0.10"
 julia = "1.11"
 
+# The two-stage SCOPF (scopf_twostage_model) needs MadNLP's SchurComplementCondensedKKTSystem
+# support for design-only constraints + the deterministic GPU Schur assembly, which live
+# on the `schur-design-constraints` branch (not yet released). Pin both MadNLP and the
+# MadNLPGPU subpackage to that branch so `Pkg.test()` (local and CI) resolves it instead
+# of the registry release. Remove once these land in a tagged MadNLP/MadNLPGPU.
+[sources]
+MadNLP = {url = "https://github.com/MadNLP/MadNLP.jl", rev = "schur-design-constraints"}
+MadNLPGPU = {url = "https://github.com/MadNLP/MadNLP.jl", rev = "schur-design-constraints", subdir = "lib/MadNLPGPU"}
+
 [extras]
 CUDA = "052768ef-5323-5732-b1bb-66c8b64840ba"
 CUDSS = "45b445bb-4962-46a0-9369-b4df9d0f772e"

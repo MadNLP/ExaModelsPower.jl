@@ -59,6 +59,65 @@ model, cons, vars, lengths, sc_data_array = goc3_model(
 result = madnlp(model; tol=1e-4)
 ```
 
+### Generic N-1 security-constrained OPF
+
+Independent of the GOC3 formulation, `scopf_model` builds a lightweight, hard-constrained
+N-1 SCOPF. Each contingency is a generator or branch (line) outage; the base case plus all
+contingencies are solved together as one AC OPF, with bounded corrective generator redispatch
+in the post-contingency scenarios. Line outages are applied by zeroing the branch admittance
+(so its flows are forced to zero), and MATPOWER `rateA = 0` ("unlimited") is mapped to a large
+finite rating.
+
+```julia
+using ExaModelsPower, MadNLP, DelimitedFiles
+
+# One outage per entry; (type = :gen, idx = g) is also supported.
+idxs = vec(readdlm("data/case118.Ctgs", Int))         # 1-based branch indices
+contingencies = [(type = :branch, idx = l) for l in idxs]
+
+model, vars, cons = scopf_model("case118.m", contingencies; form = :polar)
+result = madnlp(model; tol = 1e-4)
+
+# On a GPU backend, solve the condensed KKT system with cuDSS:
+using MadNLPGPU, CUDA, CUDSS
+model, vars, cons = scopf_model("case118.m", contingencies; backend = CUDABackend())
+result = madnlp(model;
+    kkt_system    = MadNLP.SparseCondensedKKTSystem,
+    linear_solver = MadNLPGPU.CUDSSSolver,
+    tol = 1e-4)
+```
+
+#### Two-stage / Schur form
+
+`scopf_twostage_model` builds the same problem on a `TwoStageExaCore` (base case = first stage,
+each contingency = a scenario) so it can be solved with MadNLP's `SchurComplementCondensedKKTSystem`,
+which factorizes the per-contingency blocks in parallel. It returns an extra `post_solve_info`
+NamedTuple with the Schur dimensions:
+
+```julia
+model, vars, cons, info = scopf_twostage_model("case118.m", contingencies; backend = CUDABackend())
+result = madnlp(model;
+    kkt_system    = SchurComplementCondensedKKTSystem,
+    linear_solver = MadNLPGPU.CUDSSSolver,
+    kkt_options   = Dict(:schur_ns => info.ns, :schur_nv => info.nv,
+                         :schur_nd => info.nd, :schur_nc => info.nc))
+```
+
+> **Note.** The base-case physics are first-stage *design* constraints. The current
+> `SchurComplementCondensedKKTSystem` does not yet support design-only constraint rows (solving asserts
+> `m == ns*nc`, off by exactly `info.nc_design`). The model is structurally correct; the Schur
+> solve is gated on upstream support for design-only constraints.
+
+A runnable example covering both formulations (`--mode single`/`twostage`/`compare`), both
+coordinate systems (`--form polar`/`rect`), and a choice of case (`--case case9`/`case118`) is in
+[`examples/scopf.jl`](examples/scopf.jl). Options are ArgParse CLI flags:
+
+```bash
+julia --project=./examples examples/scopf.jl --help
+julia --project=./examples examples/scopf.jl --case case9 --mode twostage --form rect
+julia --project=./examples examples/scopf.jl --gpu --inertia free
+```
+
 ### Multi-period optimal power flow
 ```julia
 model, vars, cons = mpopf_model(
