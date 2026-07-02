@@ -1,6 +1,7 @@
 using Test, ExaModelsPower, MadNLP, MadNLPGPU, KernelAbstractions, CUDA, CUDSS, PowerModels, Ipopt, JuMP, ExaModels, NLPModelsJuMP
 
 include("opf_tests.jl")
+include("powerio_parser_tests.jl")
 
 const CONFIGS = Any[
     nothing,

@@ -18,6 +18,8 @@ function get_j_cs(uid_str::String, L_J_pr::Int, L_J_cs::Int, producers_first::Bo
     parse(Int, match(r"\d+", uid_str).match) + 1 + offset
 end
 
+goc3_bus_id(data, uid::AbstractString) = data.bus_id_by_uid[String(uid)]
+
 function parse_sc_data_static(data, producers_first)
     L_J_xf = length(data.twt_lookup)
     L_J_ln = length(data.ac_line_lookup)
@@ -46,7 +48,7 @@ function parse_sc_data_static(data, producers_first)
                     j = parse(Int, match(r"\d+", val["uid"]).match) + L_J_br + 1
                     j_prcs = get_j_prcs(val["uid"], L_J_pr, L_J_cs, producers_first)
                     j_pr = get_j_pr(val["uid"], L_J_pr, L_J_cs, producers_first)
-                    bus = parse(Int, match(r"\d+", val["bus"]).match) + 1
+                    bus = goc3_bus_id(data, val["bus"])
                     uid = val["uid"]
                     cost = ts_val["cost"]
                     (j = j, bus=bus, uid = uid, cost=cost, j_pr=j_pr, j_prcs=j_prcs)
@@ -62,7 +64,7 @@ function parse_sc_data_static(data, producers_first)
                     j = parse(Int, match(r"\d+", val["uid"]).match) + L_J_br + 1
                     j_prcs = get_j_prcs(val["uid"], L_J_pr, L_J_cs, producers_first)
                     j_cs = get_j_cs(val["uid"], L_J_pr, L_J_cs, producers_first)
-                    bus = parse(Int, match(r"\d+", val["bus"]).match) + 1
+                    bus = goc3_bus_id(data, val["bus"])
                     uid = val["uid"]
                     cost = ts_val["cost"]
                     (j = j, bus=bus, uid = uid, cost=cost, j_cs=j_cs, j_prcs=j_prcs)
@@ -73,7 +75,7 @@ function parse_sc_data_static(data, producers_first)
     sc_data = (
         bus = sort([
             begin
-                i = parse(Int, match(r"\d+", val["uid"]).match)+1
+                i = goc3_bus_id(data, val["uid"])
                 uid = val["uid"]
                 v_min = val["vm_lb"]
                 v_max = val["vm_ub"]
@@ -86,7 +88,7 @@ function parse_sc_data_static(data, producers_first)
                 j = parse(Int, match(r"\d+", val["uid"]).match) + L_J_br + L_J_cspr+1
                 j_sh = parse(Int, match(r"\d+", val["uid"]).match)+1
                 uid = val["uid"]
-                bus = parse(Int, match(r"\d+", val["bus"]).match)+1
+                bus = goc3_bus_id(data, val["bus"])
                 g_sh = val["gs"]
                 b_sh = val["bs"]
                 (j = j, j_sh=j_sh, uid = uid, bus=bus, g_sh = g_sh, b_sh = b_sh)
@@ -101,8 +103,8 @@ function parse_sc_data_static(data, producers_first)
                     j_ac = j
                     j_ln = j
                     uid = val["uid"]
-                    to_bus = parse(Int, match(r"\d+", val["to_bus"]).match)+1
-                    fr_bus = parse(Int, match(r"\d+", val["fr_bus"]).match)+1
+                    to_bus = goc3_bus_id(data, val["to_bus"])
+                    fr_bus = goc3_bus_id(data, val["fr_bus"])
                     c_su = Float64(val["connection_cost"])
                     c_sd = Float64(val["disconnection_cost"])
                     s_max = Float64(val["mva_ub_nom"])
@@ -135,8 +137,8 @@ function parse_sc_data_static(data, producers_first)
                     j = j_xf + L_J_ln
                     j_ac = j
                     uid = val["uid"]
-                    to_bus = parse(Int, match(r"\d+", val["to_bus"]).match)+1
-                    fr_bus = parse(Int, match(r"\d+", val["fr_bus"]).match)+1
+                    to_bus = goc3_bus_id(data, val["to_bus"])
+                    fr_bus = goc3_bus_id(data, val["fr_bus"])
                     c_su = val["connection_cost"]
                     c_sd = val["disconnection_cost"]
                     s_max = val["mva_ub_nom"]
@@ -215,8 +217,8 @@ function parse_sc_data_static(data, producers_first)
                 qdc_to_min = val["qdc_to_lb"]
                 qdc_fr_max = val["qdc_fr_ub"]
                 qdc_to_max = val["qdc_to_ub"]
-                to_bus = parse(Int, match(r"\d+", val["to_bus"]).match)+1
-                fr_bus = parse(Int, match(r"\d+", val["fr_bus"]).match)+1
+                to_bus = goc3_bus_id(data, val["to_bus"])
+                fr_bus = goc3_bus_id(data, val["fr_bus"])
                 (j=j, j_dc = j_dc, uid=uid, pdc_max=pdc_max, qdc_fr_min=qdc_fr_min, qdc_to_min=qdc_to_min, qdc_fr_max=qdc_fr_max, qdc_to_max=qdc_to_max, to_bus=to_bus, fr_bus=fr_bus)
             end for val in values(data.dc_line_lookup)
 
@@ -230,7 +232,7 @@ function parse_sc_data_static(data, producers_first)
                     j = Int(parse(Int, match(r"\d+", val["uid"]).match) + L_J_br + 1)
                     j_pr = get_j_pr(val["uid"], L_J_pr, L_J_cs, producers_first)
                     j_prcs = get_j_prcs(val["uid"], L_J_pr, L_J_cs, producers_first)
-                    bus = Int(parse(Int, match(r"\d+", val["bus"]).match) + 1)
+                    bus = goc3_bus_id(data, val["bus"])
                     uid = String(val["uid"])
                     c_on = Float64(val["on_cost"])
                     c_su = Float64(val["startup_cost"])
@@ -280,7 +282,7 @@ function parse_sc_data_static(data, producers_first)
                     j = Int(parse(Int, match(r"\d+", val["uid"]).match) + L_J_br + 1)
                     j_prcs = get_j_prcs(val["uid"], L_J_pr, L_J_cs, producers_first)
                     j_cs = get_j_cs(val["uid"], L_J_pr, L_J_cs, producers_first)
-                    bus = Int(parse(Int, match(r"\d+", val["bus"]).match) + 1)
+                    bus = goc3_bus_id(data, val["bus"])
                     uid = String(val["uid"])
                     c_on = Float64(val["on_cost"])
                     c_su = Float64(val["startup_cost"])
@@ -359,7 +361,7 @@ function parse_sc_data_static(data, producers_first)
         ], by = x -> x.n),
 
         active_reserve_set_pr = [
-            (i = parse(Int, match(r"\d+", bus["uid"]).match) + 1,
+            (i = goc3_bus_id(data, bus["uid"]),
              j = parse(Int, match(r"\d+", device["uid"]).match) + L_J_br + 1,
              n = parse(Int, match(r"\d+", uid).match) + 1,
              n_p =  parse(Int, match(r"\d+", uid).match) + 1,
@@ -374,7 +376,7 @@ function parse_sc_data_static(data, producers_first)
         ],
 
         active_reserve_set_cs = [
-            (i = parse(Int, match(r"\d+", bus["uid"]).match) + 1,
+            (i = goc3_bus_id(data, bus["uid"]),
              j = parse(Int, match(r"\d+", device["uid"]).match) + L_J_br + 1,
              n = parse(Int, match(r"\d+", uid).match) + 1,
              n_p =  parse(Int, match(r"\d+", uid).match) + 1,
@@ -388,7 +390,7 @@ function parse_sc_data_static(data, producers_first)
         ],
 
         reactive_reserve_set_pr = [
-            (i = parse(Int, match(r"\d+", bus["uid"]).match) + 1,
+            (i = goc3_bus_id(data, bus["uid"]),
              j = parse(Int, match(r"\d+", device["uid"]).match) + L_J_br + 1,
              n = parse(Int, match(r"\d+", uid).match) + L_N_p + 1,
              n_q = parse(Int, match(r"\d+", uid).match) + 1,
@@ -402,7 +404,7 @@ function parse_sc_data_static(data, producers_first)
         ],
 
         reactive_reserve_set_cs = [
-            (i = parse(Int, match(r"\d+", bus["uid"]).match) + 1,
+            (i = goc3_bus_id(data, bus["uid"]),
              j = parse(Int, match(r"\d+", device["uid"]).match) + L_J_br + 1,
              n = parse(Int, match(r"\d+", uid).match) + L_N_p + 1,
              n_q = parse(Int, match(r"\d+", uid).match) + 1,
@@ -417,40 +419,6 @@ function parse_sc_data_static(data, producers_first)
   
     )
     return sc_data, lengths, cost_vector_pr, cost_vector_cs
-end
-
-function add_status_flags(uc_data, data)
-    for dict in uc_data
-        uid = dict["uid"]
-        on_status = dict["on_status"]
-        n = length(on_status)
-        u_on_o = data[uid]["initial_status"]["on_status"]
-
-        su_status = zeros(Int, n)
-        sd_status = zeros(Int, n)
-
-        # Handle first index using u_on_o if provided
-        
-        if u_on_o == 0 && on_status[1] == 1
-            su_status[1] = 1
-        elseif u_on_o == 1 && on_status[1] == 0
-            sd_status[1] = 1
-        end
-        
-
-        # Iterate from 1 to n-1 for the rest
-        for i in 1:n-1
-            if on_status[i] == 0 && on_status[i+1] == 1
-                su_status[i+1] = 1
-            end
-            if on_status[i] == 1 && on_status[i+1] == 0
-                sd_status[i+1] = 1
-            end
-        end
-
-        dict["su_status"] = su_status
-        dict["sd_status"] = sd_status
-    end
 end
 
 function get_as(dt, t)
@@ -470,9 +438,9 @@ function parse_sc_data(data, uc_data, data_json)
     periods = data.periods
     dt = Float64.(data.dt)
     K = length(data_json["reliability"]["contingency"])
-    add_status_flags(uc_data["time_series_output"]["ac_line"], data.ac_line_lookup)
-    add_status_flags(uc_data["time_series_output"]["two_winding_transformer"], data.twt_lookup)
-    add_status_flags(uc_data["time_series_output"]["simple_dispatchable_device"], data.sdd_lookup)
+    PowerIO.goc3_add_status_flags!(uc_data["time_series_output"]["ac_line"], data.ac_line_lookup)
+    PowerIO.goc3_add_status_flags!(uc_data["time_series_output"]["two_winding_transformer"], data.twt_lookup)
+    PowerIO.goc3_add_status_flags!(uc_data["time_series_output"]["simple_dispatchable_device"], data.sdd_lookup)
     ε_time = 1e-6
 
     T_supc_pr = [
@@ -799,8 +767,8 @@ function parse_sc_data(data, uc_data, data_json)
                             r = val["r"]
                             x = val["x"]
                             push!(jtk_ln_flattened, (flat_jtk_ln=flat_jtk_ln, ctg = parse(Int, match(r"\d+", ctg["uid"]).match)+1, j = parse(Int, match(r"\d+", val["uid"]).match)+1, j_ac = parse(Int, match(r"\d+", val["uid"]).match)+1, 
-                            j_ln = parse(Int, match(r"\d+", val["uid"]).match)+1, to_bus = parse(Int, match(r"\d+", val["to_bus"]).match)+1,
-                            fr_bus = parse(Int, match(r"\d+", val["fr_bus"]).match)+1, b_sr = -x / (x^2 + r^2), s_max_ctg = val["mva_ub_em"], u_on=uc["on_status"][t], t=t, dt = dt[t]))
+                            j_ln = parse(Int, match(r"\d+", val["uid"]).match)+1, to_bus = goc3_bus_id(data, val["to_bus"]),
+                            fr_bus = goc3_bus_id(data, val["fr_bus"]), b_sr = -x / (x^2 + r^2), s_max_ctg = val["mva_ub_em"], u_on=uc["on_status"][t], t=t, dt = dt[t]))
                             flat_jtk_ln += 1
                         end
                     end
@@ -822,8 +790,8 @@ function parse_sc_data(data, uc_data, data_json)
                             r = val["r"]
                             x = val["x"]
                             push!(jtk_xf_flattened, (flat_jtk_xf=flat_jtk_xf, ctg = parse(Int, match(r"\d+", ctg["uid"]).match)+1, j = parse(Int, match(r"\d+", val["uid"]).match)+1+ L_J_ln, j_ac = parse(Int, match(r"\d+", val["uid"]).match)+1+ L_J_ln, 
-                            j_xf = parse(Int, match(r"\d+", val["uid"]).match)+1, to_bus = parse(Int, match(r"\d+", val["to_bus"]).match)+1,
-                            fr_bus = parse(Int, match(r"\d+", val["fr_bus"]).match)+1, b_sr = -x / (x^2 + r^2), s_max_ctg = val["mva_ub_em"], u_on=uc["on_status"][t], t=t, dt = dt[t]))
+                            j_xf = parse(Int, match(r"\d+", val["uid"]).match)+1, to_bus = goc3_bus_id(data, val["to_bus"]),
+                            fr_bus = goc3_bus_id(data, val["fr_bus"]), b_sr = -x / (x^2 + r^2), s_max_ctg = val["mva_ub_em"], u_on=uc["on_status"][t], t=t, dt = dt[t]))
                             flat_jtk_xf += 1
                         end
                     end
@@ -839,8 +807,8 @@ function parse_sc_data(data, uc_data, data_json)
             for val in values(data.dc_line_lookup) 
                 if val["uid"] != component
                     push!(jtk_dc_flattened, (flat_jtk_dc=flat_jtk_dc, ctg = parse(Int, match(r"\d+", ctg["uid"]).match)+1, j = parse(Int, match(r"\d+", val["uid"]).match)+1+ L_J_ac, 
-                    j_dc = parse(Int, match(r"\d+", val["uid"]).match)+1, to_bus = parse(Int, match(r"\d+", val["to_bus"]).match)+1,
-                    fr_bus = parse(Int, match(r"\d+", val["fr_bus"]).match)+1, t=t, dt = dt[t]))
+                    j_dc = parse(Int, match(r"\d+", val["uid"]).match)+1, to_bus = goc3_bus_id(data, val["to_bus"]),
+                    fr_bus = goc3_bus_id(data, val["fr_bus"]), t=t, dt = dt[t]))
                     flat_jtk_dc += 1
                 end
             end

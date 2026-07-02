@@ -10,7 +10,7 @@ ExaModelsPower.jl is an optimal power flow models using ExaModels.jl
 ## Usage
 ### Static optimal power flow
 ```julia
-using ExaModelsPower, MadNLP, MadNLPGPU, CUDA, ExaModels, GOC3Benchmark, JSON
+using ExaModelsPower, MadNLP, MadNLPGPU, CUDA, ExaModels, JSON
 
 
 model, vars, cons = ac_opf_model(
@@ -29,14 +29,23 @@ model, vars, cons = dcopf_model(
 result = madnlp(model; tol=1e-6)
 ```
 
+Network parsing uses PowerIO, which accepts MATPOWER, PSS/E RAW, PowerWorld AUX,
+PowerModels JSON, GO Challenge 3 JSON, and Surge JSON inputs. Use `from` when the
+file extension is ambiguous:
+
+```julia
+model, vars, cons = ac_opf_model("case.raw")
+model, vars, cons = dcopf_model("case.json"; from = "powermodels")
+```
+
 ### Security-constrained optimal power flow
 ```julia
 #This model is based on the GOC3 formulation of the SCOPF problem
 #https://www.pnnl.gov/publications/grid-optimization-competition-challenge-3-problem-formulation
 
-#The current implementation requires a UC solution to be provided, which is then parsed with
-#the other input data to generate a structure of named tuples which can then interface with 
-#ExaModels to generate the full model. We do not make any relaxations or decompositions for this problem
+#The current implementation requires a UC solution. PowerIO parses the GO Challenge 3
+#input data; the UC solution is parsed alongside it to generate named tuples for
+#ExaModels. We do not make any relaxations or decompositions for this problem.
 
 model, cons, vars, lengths, sc_data_array = goc3_model(
     "data/C3E4N00073D1_scenario_303.json", "data/C3E4N00073D1_scenario_303_solution.json"; 

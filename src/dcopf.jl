@@ -87,10 +87,11 @@ function dcopf_model(
     filename;
     backend = nothing,
     T = Float64,
+    from = nothing,
     user_callback = dummy_extension,
     kwargs...,
 )
-    data = parse_ac_power_data(filename, T)
+    data = parse_ac_power_data(filename, T; from = from)
     data = convert_data(data, backend)
 
     return build_dcopf(data, user_callback; backend = backend, T = T, kwargs...)

@@ -4,12 +4,12 @@ import ExaModels: ExaModels, ExaCore, variable, parameter, constraint, ExaModel,
 using DelimitedFiles
 using ExaPowerIO
 using JSON
+using PowerIO
 
 include("parser.jl")
 include("constraint.jl")
 include("opf.jl")
 include("dcopf.jl")
-include("goc3_parser.jl")
 include("scopf.jl")
 include("mpopf.jl")
 include("sc_parser.jl")

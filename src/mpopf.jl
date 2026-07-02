@@ -1,6 +1,12 @@
-function parse_mp_power_data(filename, N, corrective_action_ratio, T = Float64)
+function parse_mp_power_data(
+    filename,
+    N,
+    corrective_action_ratio,
+    T = Float64;
+    from = nothing,
+)
 
-    data = parse_ac_power_data(filename, T)
+    data = parse_ac_power_data(filename, T; from = from)
 
     nbus = length(data.bus)
 
@@ -25,25 +31,17 @@ function update_load_data(busarray, curve)
 
     for t in eachindex(curve)
         for x in 1:size(busarray, 1)
-            b = busarray[x, t]
+            row = busarray[x, t]
+            b = row.b
             busarray[x, t] = (
-                b=ExaPowerIO.BusData{typeof(b.b.pd)}(
-                    b.b.i,
-                    b.b.bus_i,
-                    b.b.type,
-                    b.b.pd*curve[t],
-                    b.b.qd*curve[t],
-                    b.b.gs*curve[t],
-                    b.b.bs*curve[t],
-                    b.b.area,
-                    b.b.vm,
-                    b.b.va,
-                    b.b.baseKV,
-                    b.b.zone,
-                    b.b.vmax,
-                    b.b.vmin,
-                  ), t=t
-                )
+                b = merge(b, (;
+                    pd = b.pd * curve[t],
+                    qd = b.qd * curve[t],
+                    gs = b.gs * curve[t],
+                    bs = b.bs * curve[t],
+                )),
+                t = row.t,
+            )
         end
     end
 end
@@ -51,25 +49,14 @@ end
 #Pd, Qd as input
 function update_load_data(busarray, pd, qd, baseMVA)
     for (idx ,pd_t) in pairs(pd)
-        b = busarray[idx[1], idx[2]]
+        row = busarray[idx[1], idx[2]]
+        b = row.b
         busarray[idx[1], idx[2]] = (
-            b=ExaPowerIO.BusData{typeof(b.b.pd)}(
-                b.b.i,
-                b.b.bus_i,
-                b.b.type,
-                pd_t / baseMVA,
-                qd[idx[1], idx[2]] / baseMVA,
-                b.b.gs,
-                b.b.bs,
-                b.b.area,
-                b.b.vm,
-                b.b.va,
-                b.b.baseKV,
-                b.b.zone,
-                b.b.vmax,
-                b.b.vmin,
-            ),
-            t=idx[2],
+            b = merge(b, (;
+                pd = pd_t / baseMVA,
+                qd = qd[idx[1], idx[2]] / baseMVA,
+            )),
+            t = row.t,
         )
     end
 end
@@ -415,13 +402,14 @@ function mpopf_model(
     backend = nothing,
     form = :polar,
     T = Float64,
+    from = nothing,
     storage_complementarity_constraint = false,
     user_callback = dummy_extension,
     kwargs...,
 )
 
     @assert length(curve) > 0
-    data = parse_mp_power_data(filename, N, corrective_action_ratio, T)
+    data = parse_mp_power_data(filename, N, corrective_action_ratio, T; from = from)
     update_load_data(data.busarray, curve)
     data = convert_data(data,backend)
     Nbus = size(data.bus, 1)
@@ -442,12 +430,13 @@ function mpopf_model(
     backend = nothing,
     form = :polar,
     T = Float64,
+    from = nothing,
     storage_complementarity_constraint = false,
     user_callback = dummy_extension,
     kwargs...,
 )
 
-    data = parse_mp_power_data(filename, N, corrective_action_ratio, T)
+    data = parse_mp_power_data(filename, N, corrective_action_ratio, T; from = from)
     update_load_data(data.busarray, pd, qd, data.baseMVA[])
     data = convert_data(data,backend)
     Nbus = size(data.bus, 1)
@@ -468,12 +457,13 @@ function mpopf_model(
     backend = nothing,
     form = :polar,
     T = Float64,
+    from = nothing,
     user_callback = dummy_extension,
     kwargs...,
 )
 
     @assert length(curve) > 0
-    data = parse_mp_power_data(filename, N, corrective_action_ratio, T)
+    data = parse_mp_power_data(filename, N, corrective_action_ratio, T; from = from)
     update_load_data(data.busarray, curve)
     data = convert_data(data,backend)
     Nbus = size(data.bus, 1)
@@ -494,13 +484,14 @@ function mpopf_model(
     backend = nothing,
     form = :polar,
     T = Float64,
+    from = nothing,
     storage_complementarity_constraint = false,
     user_callback = dummy_extension,
     kwargs...,
 )
 
 
-    data = parse_mp_power_data(filename, N, corrective_action_ratio, T)
+    data = parse_mp_power_data(filename, N, corrective_action_ratio, T; from = from)
     update_load_data(data.busarray, pd, qd, data.baseMVA[])
     data = convert_data(data,backend)
     Nbus = size(data.bus, 1)
@@ -511,4 +502,3 @@ function mpopf_model(
     end
     return build_mpopf(data, Nbus, N, discharge_func, form,user_callback, backend = backend, T = T, kwargs...)
 end
-
