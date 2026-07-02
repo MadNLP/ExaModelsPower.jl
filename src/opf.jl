@@ -219,11 +219,12 @@ function ac_opf_model(
     T = Float64,
     form = :polar,
     from = nothing,
+    parser = :powerio,
     user_callback = dummy_extension,
     kwargs...,
 )
 
-    data = parse_ac_power_data(filename, T; from = from)
+    data = parse_ac_power_data(filename, T; from = from, parser = parser)
     data = convert_data(data, backend)
 
     if form == :polar

@@ -10,8 +10,8 @@ function goc3_model(
 
 
     uc_data = JSON.parsefile(uc_filename)
-    data = get_data_from_file(filename)
-    data_json = JSON.parsefile(filename)
+    data = PowerIO.parse_goc3_json(filename)
+    data_json = data.raw
     sc_data, lengths, producers_first = parse_sc_data(data, uc_data, data_json)
     @info "parsed data"
     
@@ -816,4 +816,3 @@ function goc3_model(
     return model, cons, vars, lengths, sc_data_array
 
 end
-

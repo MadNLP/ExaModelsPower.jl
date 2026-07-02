@@ -1,6 +1,13 @@
-function parse_mp_power_data(filename, N, corrective_action_ratio, T = Float64; from = nothing)
+function parse_mp_power_data(
+    filename,
+    N,
+    corrective_action_ratio,
+    T = Float64;
+    from = nothing,
+    parser = :powerio,
+)
 
-    data = parse_ac_power_data(filename, T; from = from)
+    data = parse_ac_power_data(filename, T; from = from, parser = parser)
 
     nbus = length(data.bus)
 
@@ -397,13 +404,14 @@ function mpopf_model(
     form = :polar,
     T = Float64,
     from = nothing,
+    parser = :powerio,
     storage_complementarity_constraint = false,
     user_callback = dummy_extension,
     kwargs...,
 )
 
     @assert length(curve) > 0
-    data = parse_mp_power_data(filename, N, corrective_action_ratio, T; from = from)
+    data = parse_mp_power_data(filename, N, corrective_action_ratio, T; from = from, parser = parser)
     update_load_data(data.busarray, curve)
     data = convert_data(data,backend)
     Nbus = size(data.bus, 1)
@@ -425,12 +433,13 @@ function mpopf_model(
     form = :polar,
     T = Float64,
     from = nothing,
+    parser = :powerio,
     storage_complementarity_constraint = false,
     user_callback = dummy_extension,
     kwargs...,
 )
 
-    data = parse_mp_power_data(filename, N, corrective_action_ratio, T; from = from)
+    data = parse_mp_power_data(filename, N, corrective_action_ratio, T; from = from, parser = parser)
     update_load_data(data.busarray, pd, qd, data.baseMVA[])
     data = convert_data(data,backend)
     Nbus = size(data.bus, 1)
@@ -452,12 +461,13 @@ function mpopf_model(
     form = :polar,
     T = Float64,
     from = nothing,
+    parser = :powerio,
     user_callback = dummy_extension,
     kwargs...,
 )
 
     @assert length(curve) > 0
-    data = parse_mp_power_data(filename, N, corrective_action_ratio, T; from = from)
+    data = parse_mp_power_data(filename, N, corrective_action_ratio, T; from = from, parser = parser)
     update_load_data(data.busarray, curve)
     data = convert_data(data,backend)
     Nbus = size(data.bus, 1)
@@ -479,13 +489,14 @@ function mpopf_model(
     form = :polar,
     T = Float64,
     from = nothing,
+    parser = :powerio,
     storage_complementarity_constraint = false,
     user_callback = dummy_extension,
     kwargs...,
 )
 
 
-    data = parse_mp_power_data(filename, N, corrective_action_ratio, T; from = from)
+    data = parse_mp_power_data(filename, N, corrective_action_ratio, T; from = from, parser = parser)
     update_load_data(data.busarray, pd, qd, data.baseMVA[])
     data = convert_data(data,backend)
     Nbus = size(data.bus, 1)
