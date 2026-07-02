@@ -88,11 +88,10 @@ function dcopf_model(
     backend = nothing,
     T = Float64,
     from = nothing,
-    parser = :powerio,
     user_callback = dummy_extension,
     kwargs...,
 )
-    data = parse_ac_power_data(filename, T; from = from, parser = parser)
+    data = parse_ac_power_data(filename, T; from = from)
     data = convert_data(data, backend)
 
     return build_dcopf(data, user_callback; backend = backend, T = T, kwargs...)

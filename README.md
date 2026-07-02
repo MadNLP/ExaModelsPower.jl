@@ -29,21 +29,13 @@ model, vars, cons = dcopf_model(
 result = madnlp(model; tol=1e-6)
 ```
 
-By default, network parsing uses PowerIO. It accepts MATPOWER, PSS/E RAW,
-PowerWorld AUX, PowerModels JSON, GO Challenge 3 JSON, and Surge JSON inputs.
-Use `from` when the file extension is ambiguous. Pass `parser = :exapowerio`
-only to use the previous MATPOWER and PGLib parser.
+Network parsing uses PowerIO, which accepts MATPOWER, PSS/E RAW, PowerWorld AUX,
+PowerModels JSON, GO Challenge 3 JSON, and Surge JSON inputs. Use `from` when the
+file extension is ambiguous:
 
 ```julia
-model, vars, cons = ac_opf_model(
-    "case.raw";
-    form = :polar,
-)
-
-model, vars, cons = dcopf_model(
-    "case.json";
-    from = "powermodels",
-)
+model, vars, cons = ac_opf_model("case.raw")
+model, vars, cons = dcopf_model("case.json"; from = "powermodels")
 ```
 
 ### Security-constrained optimal power flow
