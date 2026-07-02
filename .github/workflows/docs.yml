@@ -11,6 +11,9 @@ jobs:
   build:
     runs-on:
       labels: cuda
+    env:
+      # serve newly registered versions without waiting for pkg server storage processing
+      JULIA_PKG_SERVER_REGISTRY_PREFERENCE: eager
     strategy:
       matrix:
         julia-version: ['1']

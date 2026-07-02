@@ -1,23 +1,23 @@
 convert_data(data::N, backend) where {names,N<:NamedTuple{names}} =
     NamedTuple{names}(convert_array(d, backend) for d in data)
 
-function _resolve_power_data_path(filename)
-    isfile(filename) && return filename
-    return joinpath(ExaPowerIO.get_path(:pglib), filename)
-end
-
-function _parser_symbol(parser)
-    parser isa Symbol && return parser
-    parser isa AbstractString && return Symbol(parser)
-    error("parser must be :exapowerio or :powerio")
-end
-
-function _empty_storage_data()
-    return Vector{NamedTuple{(:i,), Tuple{Int64}}}()
+function parse_ac_power_data(filename, T = Float64; from = nothing, parser = :powerio)
+    parser = Symbol(parser)
+    if parser == :powerio
+        path = isfile(filename) ? filename : joinpath(ExaPowerIO.get_path(:pglib), filename)
+        @info "Loading power case file"
+        return PowerIO.parse_ac_power_data(path; from = from, T = T)
+    end
+    parser == :exapowerio ||
+        error("unknown parser $(repr(parser)); expected :powerio or :exapowerio")
+    from === nothing || error("from requires parser = :powerio")
+    @info "Loading matpower file"
+    library = isfile(filename) ? nothing : :pglib
+    return _shape_exapowerio_data(ExaPowerIO.parse_matpower(T, filename; library))
 end
 
 function _shape_exapowerio_data(data)
-    empty_storage = _empty_storage_data()
+    empty_storage = Vector{NamedTuple{(:i,), Tuple{Int64}}}()
     return (
         baseMVA = [data.baseMVA],
         bus = data.bus,
@@ -44,28 +44,4 @@ function _shape_exapowerio_data(data)
         srating = isempty(data.storage) ? empty_storage : [s.thermal_rating for s in data.storage],
         emax = isempty(data.storage) ? empty_storage : [s.energy_rating for s in data.storage],
     )
-end
-
-function _parse_ac_power_data_exapowerio(filename, T; from)
-    from === nothing || error("from requires parser = :powerio")
-    @info "Loading matpower file"
-    library = isfile(filename) ? nothing : :pglib
-    return _shape_exapowerio_data(ExaPowerIO.parse_matpower(T, filename; library))
-end
-
-function _parse_ac_power_data_powerio(filename, T; from)
-    path = _resolve_power_data_path(filename)
-    @info "Loading power case file"
-    return PowerIO.parse_ac_power_data(path; from = from, T = T)
-end
-
-function parse_ac_power_data(filename, T = Float64; from = nothing, parser = :powerio)
-    parser = _parser_symbol(parser)
-    if parser == :exapowerio
-        return _parse_ac_power_data_exapowerio(filename, T; from = from)
-    elseif parser == :powerio
-        return _parse_ac_power_data_powerio(filename, T; from = from)
-    else
-        error("unknown parser $(repr(parser)); expected :exapowerio or :powerio")
-    end
 end

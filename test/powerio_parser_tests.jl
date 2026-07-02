@@ -1,61 +1,23 @@
 import ExaPowerIO
 import PowerIO
 
-function _case_path(name)
-    return joinpath(@__DIR__, "..", "data", name)
-end
+_case_path(name) = joinpath(@__DIR__, "..", "data", name)
 
-function _matches(lhs, rhs)
-    if lhs isa Real && rhs isa Real
-        return isapprox(lhs, rhs; rtol = 1e-9, atol = 1e-10, nans = true)
-    end
-    return lhs == rhs
-end
+_matches(lhs::Real, rhs::Real) = isapprox(lhs, rhs; rtol = 1e-9, atol = 1e-10, nans = true)
+_matches(lhs, rhs) = lhs == rhs
 
-function _test_matching_fields(lhs, rhs, fields)
-    for field in fields
-        @test _matches(getproperty(lhs, field), getproperty(rhs, field))
-    end
-end
-
-function _test_matching_rows(actual, expected, fields)
+function _test_matching_rows(actual, expected)
     @test length(actual) == length(expected)
-    for i in 1:min(length(actual), length(expected))
-        _test_matching_fields(actual[i], expected[i], fields)
+    for (a, e) in zip(actual, expected), field in propertynames(e)
+        @test _matches(getproperty(a, field), getproperty(e, field))
     end
 end
 
 function _test_matches_exapowerio(actual, expected)
     @test actual.baseMVA == [expected.baseMVA]
-    _test_matching_rows(
-        actual.bus,
-        expected.bus,
-        (:i, :bus_i, :type, :pd, :qd, :gs, :bs, :area, :vm, :va,
-         :baseKV, :zone, :vmax, :vmin),
-    )
-    _test_matching_rows(
-        actual.gen,
-        expected.gen,
-        (:i, :bus, :pg, :qg, :qmax, :qmin, :vg, :mbase, :status,
-         :pmax, :pmin, :model_poly, :startup, :shutdown, :n, :c),
-    )
-    _test_matching_rows(
-        actual.branch,
-        expected.branch,
-        (:i, :f_bus, :t_bus, :br_r, :br_x, :b_fr, :b_to, :g_fr,
-         :g_to, :rate_a, :rate_b, :rate_c, :tap, :shift, :status,
-         :angmin, :angmax, :f_idx, :t_idx, :c1, :c2, :c3, :c4,
-         :c5, :c6, :c7, :c8),
-    )
-    _test_matching_rows(actual.arc, expected.arc, (:i, :bus, :rate_a))
-    _test_matching_rows(
-        actual.storage,
-        expected.storage,
-        (:i, :storage_bus, :Pexts, :Qexts, :energy, :energy_rating,
-         :charge_rating, :discharge_rating, :charge_efficiency,
-         :discharge_efficiency, :thermal_rating, :qmin, :qmax, :Zr,
-         :Zim, :p_loss, :q_loss, :status),
-    )
+    for table in (:bus, :gen, :branch, :arc, :storage)
+        _test_matching_rows(getproperty(actual, table), getproperty(expected, table))
+    end
 end
 
 @testset "PowerIO parser backend" begin
