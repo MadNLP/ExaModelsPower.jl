@@ -4,8 +4,8 @@
 # listed in data/<case>.Ctgs, with bounded corrective generator redispatch. Two
 # formulations of the same problem are available via `mode`:
 #
-#   :single    scopf_model          — one monolithic ExaModel; default sparse KKT
-#                                      (cuDSS condensed on GPU).
+#   :single    scopf_model          — one monolithic ExaModel; condensed sparse KKT
+#                                      (CHOLMOD on CPU, cuDSS on GPU).
 #   :twostage  scopf_twostage_model — TwoStageExaCore (base case = first stage,
 #                                      each contingency = a scenario); solved with
 #                                      MadNLP's SchurComplementCondensedKKTSystem.
@@ -64,10 +64,14 @@ function parse_options(args)
             dest_name = "max_iter"
             default = 3000
         "--cudss-ir"
-            help = "cuDSS iterative-refinement steps for the GPU Schur path (scenario + complement solvers); 0 = off"
+            help = "cuDSS iterative-refinement steps for the GPU Schur path (scenario + complement solvers); 0 = Schur-path default (5)"
             arg_type = Int
             dest_name = "cudss_ir"
             default = 0
+        "--matching"
+            help = "cuDSS matching (pivot-maximizing permutation) on the GPU solvers. The factorization/solve are correct, but cuDSS 0.8 reports inertia (0,0) whenever matching is on (scratch/matching_inertia_repro.jl), so --inertia based/auto spiral into RESTORATION_FAILED; use --inertia free, or wait for MadNLPGPU's diag-based inertia fallback (scratch/matching_inertia_fix.jl). Off by default until that lands."
+            arg_type = Bool
+            default = false
         "--tol"
             help = "MadNLP tol. GPU two-stage has a ~5e-3 Schur backward-error floor; tol below ~3e-3 mostly stalls there. Use ~5e-3."
             arg_type = Float64
@@ -85,18 +89,30 @@ function parse_options(args)
 end
 
 # Build the two-stage Schur `kkt_options` from the model's two-stage tags. On GPU,
-# optionally enable cuDSS iterative refinement on BOTH the per-scenario block solver
-# and the first-stage Schur-complement solver.
-function schur_kkt_options(info, backend, cudss_ir)
+# configure cuDSS iterative refinement on both solvers, and (if requested) matching on
+# the first-stage Schur-complement solver ONLY — cuDSS matching is NOT SUPPORTED in
+# uniform-batch mode (analysis fails with CUDSS_STATUS_NOT_SUPPORTED; see
+# scratch/matching_ubatch_repro.jl), and the per-scenario blocks are one ubatch solver.
+# On the complement solver matching factorizes/solves correctly but cuDSS 0.8 reports
+# inertia (0,0) with matching on (see --matching help), so inertia-based IPM modes fail
+# until MadNLPGPU recovers the inertia from the factor diagonal. An explicit
+# `schur_*_opt_linear_solver` struct REPLACES MadNLPGPU's Schur-path defaults
+# (cudss_ir = 5, cudss_ir_tol = 0.0), so those must be re-applied here — in
+# particular ir_tol must stay 0.0 to keep cuDSS 0.8's IR_FAILED gate disarmed.
+function schur_kkt_options(info, backend, cudss_ir, matching)
     kkt = Dict{Symbol, Any}(
         :schur_ns => info.ns, :schur_nv => info.nv, :schur_nd => info.nd, :schur_nc => info.nc,
         :schur_var_scen => info.var_scen, :schur_con_scen => info.con_scen,
     )
-    if backend !== nothing && cudss_ir > 0
-        sc = MadNLP.default_options(MadNLPGPU.CUDSSSolver); sc.cudss_ir = cudss_ir
-        sh = MadNLP.default_options(MadNLPGPU.CUDSSSolver); sh.cudss_ir = cudss_ir
-        kkt[:schur_scenario_opt_linear_solver] = sc
-        kkt[:schur_opt_linear_solver] = sh
+    if backend !== nothing && (cudss_ir > 0 || matching)
+        for (key, allow_matching) in ((:schur_scenario_opt_linear_solver, false),
+                                      (:schur_opt_linear_solver, true))
+            o = MadNLP.default_options(MadNLPGPU.CUDSSSolver)
+            o.cudss_ir = cudss_ir > 0 ? cudss_ir : 5
+            o.cudss_ir_tol = 0.0
+            o.cudss_matching = matching && allow_matching
+            kkt[key] = o
+        end
     end
     return kkt
 end
@@ -115,12 +131,23 @@ backend  = opts[:gpu] ? CUDABackend() : nothing
 inertia  = INERTIA[opts[:inertia]]   # MadNLP inertia_correction_method type
 max_iter = opts[:max_iter]
 cudss_ir = opts[:cudss_ir]
+matching = opts[:matching]
 tol        = opts[:tol]
 richardson = opts[:richardson]
 retry      = opts[:retry]
 
 # Pass richardson_max_iter only when overridden (0 = library default of 10).
 rich_kw() = richardson > 0 ? (; richardson_max_iter = richardson) : (;)
+
+# Every mode solves a condensed KKT system so they all optimize the SAME relaxation:
+# the two-stage Schur path is inherently condensed (RelaxEquality with
+# bound_relax_factor = tol), and a non-condensed `:single` (hard equalities) would
+# reach the true optimum, ~2·tol of equality slack away (13.43 on case9 at tol=1e-4).
+# The condensed matrix is SPD: CHOLMOD on CPU, cuDSS on GPU.
+condensed_opts() = backend === nothing ?
+    (; kkt_system = MadNLP.SparseCondensedKKTSystem, linear_solver = MadNLP.CHOLMODSolver) :
+    (; kkt_system = MadNLP.SparseCondensedKKTSystem, linear_solver = MadNLPGPU.CUDSSSolver,
+       cudss_matching = matching)
 
 # GPU two-stage convergence is a per-run roulette (the GPU Schur apply is not backward
 # stable on the ill-conditioned KKT) AND can occasionally converge (status SUCCESS) to a
@@ -150,12 +177,8 @@ if mode == :single
     model, vars, cons = scopf_model(case, contingencies; form = form, backend = backend)
     @info "Model size" n_var = model.meta.nvar n_con = model.meta.ncon
 
-    # On a GPU backend the MadNLP defaults (SparseKKTSystem + MUMPS) are CPU-only and
-    # cannot assemble the KKT matrix from device arrays; use the condensed KKT + cuDSS.
-    solver_opts = backend === nothing ? (;) :
-        (; kkt_system = MadNLP.SparseCondensedKKTSystem, linear_solver = MadNLPGPU.CUDSSSolver)
-    result = madnlp(model; tol = 1.0e-4, print_level = MadNLP.INFO,
-                    inertia_correction_method = inertia, max_iter = max_iter, solver_opts...)
+    result = madnlp(model; tol = tol, print_level = MadNLP.INFO,
+                    inertia_correction_method = inertia, max_iter = max_iter, condensed_opts()...)
 
     println()
     @info "SCOPF result" status = result.status objective = result.objective iterations = result.iter
@@ -175,7 +198,7 @@ elseif mode == :twostage
     # the tags let the Schur solver partition the interleaved layout and fold the
     # `nc_design` base-case design constraints into its first-stage block.
     lin = backend === nothing ? MadNLP.MumpsSolver : MadNLPGPU.CUDSSSolver
-    kkt_opts = schur_kkt_options(info, backend, cudss_ir)
+    kkt_opts = schur_kkt_options(info, backend, cudss_ir, matching)
 
     # With the deterministic GPU Schur assembly the two-stage solve converges reliably at
     # tol=1e-4 (matching CPU); --retry defaults to 1 (a single solve) and is kept only as a
@@ -199,13 +222,12 @@ elseif mode == :twostage
     println(round.(pg0; digits = 3))
 
 elseif mode == :compare
-    # Solve the SAME N-1 SCOPF both ways and check they agree. `:single` is the
-    # monolithic ExaModel (default sparse KKT); `:twostage` is the Schur solve.
+    # Solve the SAME N-1 SCOPF both ways and check they agree. Both use the same
+    # condensed relaxation (see condensed_opts) and the same tol, so the objectives
+    # must match tightly.
     m1, v1, _ = scopf_model(case, contingencies; form = form, backend = backend)
-    s1 = backend === nothing ? (;) :
-        (; kkt_system = MadNLP.SparseCondensedKKTSystem, linear_solver = MadNLPGPU.CUDSSSolver)
-    r1 = madnlp(m1; tol = 1.0e-4, print_level = MadNLP.ERROR,
-                inertia_correction_method = inertia, max_iter = max_iter, s1...)
+    r1 = madnlp(m1; tol = tol, print_level = MadNLP.ERROR,
+                inertia_correction_method = inertia, max_iter = max_iter, condensed_opts()...)
     pg_single = Array(solution(r1, v1.pg))[:, 1]
 
     m2, v2, _, info = scopf_twostage_model(case, contingencies; form = form, backend = backend)
@@ -216,7 +238,7 @@ elseif mode == :compare
         callback = MadNLP.SparseCallback,
         kkt_system = MadNLP.SchurComplementCondensedKKTSystem,
         linear_solver = lin,
-        kkt_options = schur_kkt_options(info, backend, cudss_ir),
+        kkt_options = schur_kkt_options(info, backend, cudss_ir, matching),
         inertia_correction_method = inertia,
         max_iter = max_iter,
         tol = tol, print_level = MadNLP.ERROR,
