@@ -2,8 +2,8 @@ function dummy_extension(core, vars, cons)
     return core, (;), (;)
 end
 
-function build_polar_opf(data, user_callback; backend = nothing, T=Float64, concrete = nothing, kwargs...)
-    core = ExaCore(T; backend = backend, concrete = concrete)
+function build_polar_opf(data, user_callback; backend = nothing, T=Float64, kwargs...)
+    core = ExaCore(T; backend = backend)
 
     @add_var(core, va, length(data.bus);)
     @add_var(core, vm,
@@ -91,8 +91,8 @@ function build_polar_opf(data, user_callback; backend = nothing, T=Float64, conc
     return model, vars, cons
 end
 
-function build_rect_opf(data, user_callback; backend = nothing, T=Float64, concrete = nothing, kwargs...)
-    core = ExaCore(T; backend = backend, concrete = concrete)
+function build_rect_opf(data, user_callback; backend = nothing, T=Float64, kwargs...)
+    core = ExaCore(T; backend = backend)
 
     @add_var(core, vr, length(data.bus); start = fill!(similar(data.bus, T), one(T)))
     @add_var(core, vim, length(data.bus))

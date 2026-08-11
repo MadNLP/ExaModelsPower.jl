@@ -5,7 +5,6 @@ function goc3_model(
     include_ctg = true, #contingencies will be specified in input data
     result_set = [],
     user_callback = dummy_extension,
-    concrete = nothing,
     kwargs...
         )
 
@@ -15,15 +14,15 @@ function goc3_model(
     data_json = JSON.parsefile(filename)
     sc_data, lengths, producers_first = parse_sc_data(data, uc_data, data_json)
     @info "parsed data"
-    
+
     (L_J_xf, L_J_ln, L_J_ac, L_J_dc, L_J_br, L_J_cs,
     L_J_pr, L_J_cspr, L_J_sh, I, L_T, L_N_p, L_N_q, L_W_en_min_pr,
      L_W_en_min_cs, L_W_en_max_pr, L_W_en_max_cs, K) = lengths
-    
+
     sc_data_array = sc_data
     sc_data = convert_data(sc_data, backend)
 
-    core = ExaCore(T; backend = backend, concrete = concrete)
+    core = ExaCore(T; backend = backend)
 
     if result_set != []
         initialize_vars = true

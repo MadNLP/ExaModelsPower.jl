@@ -216,8 +216,8 @@ function add_mpopf_cons(core, data, N, Nbus, vars, cons, form)
     return core, vars, cons
 end
 
-function build_mpopf(data, Nbus, N, form, user_callback; backend = nothing, T = Float64, storage_complementarity_constraint = false, concrete = nothing, kwargs...)
-    core = ExaCore(T; backend = backend, concrete = concrete)
+function build_mpopf(data, Nbus, N, form, user_callback; backend = nothing, T = Float64, storage_complementarity_constraint = false, kwargs...)
+    core = ExaCore(T; backend = backend)
 
     core, vars, cons = build_base_mpopf(core, data, N)
     core, vars, cons = add_mpopf_cons(core, data, N, Nbus, vars, cons, form)
@@ -236,8 +236,8 @@ function build_mpopf(data, Nbus, N, form, user_callback; backend = nothing, T = 
 end
 
 #different constraints used when a function is added to remove complementarity and make charge/discharge curve smooth
-function build_mpopf(data, Nbus, N, discharge_func::Function, form, user_callback; backend = nothing, T = Float64, concrete = nothing, kwargs...)
-    core = ExaCore(T; backend = backend, concrete = concrete)
+function build_mpopf(data, Nbus, N, discharge_func::Function, form, user_callback; backend = nothing, T = Float64, kwargs...)
+    core = ExaCore(T; backend = backend)
 
     core, vars, cons = build_base_mpopf(core, data, N)
     core, vars, cons = add_mpopf_cons(core, data, N, Nbus, vars, cons, form)
