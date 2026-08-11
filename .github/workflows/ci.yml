@@ -23,7 +23,7 @@ jobs:
   test:
     name: test (${{ matrix.selection }})
     runs-on:
-      labels: cuda13
+      labels: cuda
     strategy:
       # One slice failing should not cancel the others; they are independent, and GOC3 is
       # much the longest, so cancelling it on an unrelated backend failure wastes the run.

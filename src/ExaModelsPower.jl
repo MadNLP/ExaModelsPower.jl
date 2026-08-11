@@ -1,6 +1,6 @@
 module ExaModelsPower
 
-import ExaModels: ExaModels, ExaCore, variable, parameter, constraint, ExaModel, objective, constraint!, convert_array, solution
+import ExaModels: ExaModels, ExaCore, @add_var, @add_par, @add_con, @add_obj, @add_con!, ExaModel, convert_array, solution
 using DelimitedFiles
 using ExaPowerIO
 using JSON
