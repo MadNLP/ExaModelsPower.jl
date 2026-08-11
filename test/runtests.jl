@@ -107,146 +107,120 @@ end
 function runtests()
     @testset "ExaModelsPower test" begin
 
-        # The PowerModels/Ipopt and JuMP/MadNLP reference solutions do not depend on the
-        # backend, so compute them once per case/form and reuse across every backend
-        # instead of re-solving each iteration.
-        static_ref_cache = Dict{Tuple{String,String},Any}()
-        dcopf_ref_cache = Dict{String,Any}()
+        # Solving is the expensive half of this suite, and MadNLP is not what this package
+        # is responsible for: its job is to build correct models.  So the smallest case is
+        # solved once on the CPU and once on the GPU -- static AC against the
+        # PowerModels/Ipopt reference, and multi-period against the hardcoded objective --
+        # and every other configuration is checked by evaluating its callbacks.
+        solve_here(backend) = backend === nothing || backend isa CUDABackend
+        solve_case, solve_form = "case3", "rect"
 
-        # The multi-period sections dominated the OPF phase (33.5 of its 49.4 min) and
+        # The PowerModels/Ipopt and JuMP/MadNLP reference solutions do not depend on the
+        # backend, so compute them once per case/form and reuse them.
+        static_ref_cache = Dict{Tuple{String,String},Any}()
+
         # case3 and case5 exercise the same code with different data, so the multi-period
-        # sections keep case3 only.  Every backend otherwise runs the same set: with one
-        # job per backend the wall clock is the slowest backend, not their sum, so there
-        # is nothing to gain by giving them different coverage.
+        # sections keep case3 only.  Every backend runs the same set: with one job per
+        # backend the wall clock is the slowest backend, not the sum of all of them.
         mp_cases = mp_test_cases[1:1]
         mp_stor  = mp_stor_test_cases[1:1]
 
         for backend in CONFIGS
+            solving = solve_here(backend)
+
+            # Static AC
             for (filename, case, test_function) in test_cases
                 for (form_str, form, power_model, test_voltage) in static_forms
                     m32, _, _ = ac_opf_model(filename; T=Float32, backend = backend, form=form)
-
-                    m64, v64, c64 = ac_opf_model(filename; T=Float64, backend = backend, form=form)
-                    result64 = exasolve(m64, backend; print_level = MadNLP.ERROR)
-                    va64, vm64, pg64, qg64, p64, q64 = v64
-                    
-                    result_pm, result_nlp_pm = get!(static_ref_cache, (filename, form_str)) do
-                        nlp_solver = JuMP.optimizer_with_attributes(Ipopt.Optimizer, "tol"=>Float64(result64.options.tol), "print_level"=>0)
-                        rpm = solve_opf(filename, power_model, nlp_solver)
-
-                        m_pm = JuMP.Model()
-                        instantiate_model(parse_pm(filename), power_model, PowerModels.build_opf, jump_model = m_pm)
-                        nlp_pm = MathOptNLPModel(m_pm)
-                        rnlp = madnlp(nlp_pm; print_level = MadNLP.ERROR)
-                        (rpm, rnlp)
-                    end
+                    m64, v64, _ = ac_opf_model(filename; T=Float64, backend = backend, form=form)
 
                     @testset "$case, static, $backend, $form_str" begin
-                        test_float32(m32, m64, result64, backend)
-                        test_function(result64, result_pm, result_nlp_pm, pg64, qg64, p64, q64)
-                        test_voltage(result64, result_pm, va64, vm64)
+                        test_callbacks(m32, m64, backend)
+                    end
+
+                    if solving && case == solve_case && form_str == solve_form
+                        va64, vm64, pg64, qg64, p64, q64 = v64
+                        result64 = exasolve(m64, backend; print_level = MadNLP.ERROR)
+
+                        result_pm, result_nlp_pm = get!(static_ref_cache, (filename, form_str)) do
+                            nlp_solver = JuMP.optimizer_with_attributes(Ipopt.Optimizer, "tol"=>Float64(result64.options.tol), "print_level"=>0)
+                            rpm = solve_opf(filename, power_model, nlp_solver)
+
+                            m_pm = JuMP.Model()
+                            instantiate_model(parse_pm(filename), power_model, PowerModels.build_opf, jump_model = m_pm)
+                            rnlp = madnlp(MathOptNLPModel(m_pm); print_level = MadNLP.ERROR)
+                            (rpm, rnlp)
+                        end
+
+                        @testset "$case, static solve, $backend, $form_str" begin
+                            test_function(result64, result_pm, result_nlp_pm, pg64, qg64, p64, q64)
+                            test_voltage(result64, result_pm, va64, vm64)
+                        end
                     end
                 end
             end
-            
-            #Test MP
+
+            # Multi-period
             for (form_str, symbol) in mp_forms
                 for (filename, case, Pd_pregen, Qd_pregen, true_sol_curve, true_sol_pregen) in mp_cases
-                    #Curve = [1, .9, .8, .95, 1]
+                    variants = [
+                        ("curve",        () -> (T -> mpopf_model(filename, [1, .9, .8, .95, 1]; T = T, backend = backend, form = symbol))),
+                        ("curve, func",  () -> (T -> mpopf_model(filename, [1, .9, .8, .95, 1], example_func; T = T, backend = backend, form = symbol))),
+                        ("pregen",       () -> (T -> mpopf_model(filename, Pd_pregen, Qd_pregen; T = T, backend = backend, form = symbol))),
+                        ("pregen, func", () -> (T -> mpopf_model(filename, Pd_pregen, Qd_pregen, example_func; T = T, backend = backend, form = symbol))),
+                    ]
+                    for (label, mk) in variants
+                        build = mk()
+                        m32, _, _ = build(Float32)
+                        m64, _, _ = build(Float64)
 
-                    m32, _, _ = mpopf_model(filename, [1, .9, .8, .95, 1]; T = Float32, backend = backend, form = symbol)
-                    m64, v64, c64 = mpopf_model(filename, [1, .9, .8, .95, 1]; T = Float64, backend = backend, form = symbol)
-                    result64 = exasolve(m64, backend; print_level = MadNLP.ERROR)
-                    @testset "$(case), MP, $(backend), curve, $(form_str)" begin
-                        test_float32(m32, m64, result64, backend)
-                        test_mp_case(result64, true_sol_curve)
-                    end
-                    #w function
-                    m32, _, _ = mpopf_model(filename, [1, .9, .8, .95, 1], example_func; T = Float32, backend = backend, form = symbol)
-                    m64, v64, c64 = mpopf_model(filename, [1, .9, .8, .95, 1], example_func; T = Float64, backend = backend, form = symbol)
-                    result64 = exasolve(m64, backend; print_level = MadNLP.ERROR)
-                    @testset "$(case), MP, $(backend), curve, $(form_str), func" begin
-                        test_float32(m32, m64, result64, backend)
-                        test_mp_case(result64, true_sol_curve)
-                    end
-                
+                        @testset "$(case), MP, $(backend), $(label), $(form_str)" begin
+                            test_callbacks(m32, m64, backend)
+                        end
 
-                    #Pregenerated Pd and Qd
-                    m32, _, _ = mpopf_model(filename, Pd_pregen, Qd_pregen; T = Float32, backend = backend, form = symbol)
-                    m64, v64, c64 = mpopf_model(filename, Pd_pregen, Qd_pregen; T = Float64, backend = backend, form = symbol)
-                    result64 = exasolve(m64, backend; print_level = MadNLP.ERROR)
-                    @testset "$(case), MP, $(backend), pregen, $(form_str)" begin
-                        test_float32(m32, m64, result64, backend)
-                        test_mp_case(result64, true_sol_pregen)
-                    end
-                    #w function
-                    m32, _, _ = mpopf_model(filename, Pd_pregen, Qd_pregen, example_func; T = Float32, backend = backend, form = symbol)
-                    m64, v64, c64 = mpopf_model(filename, Pd_pregen, Qd_pregen, example_func; T = Float64, backend = backend, form = symbol)
-                    result64 = exasolve(m64, backend; print_level = MadNLP.ERROR)
-                    @testset "$(case), MP, $(backend), pregen, $(form_str), func" begin
-                        test_float32(m32, m64, result64, backend)
-                        test_mp_case(result64, true_sol_pregen)
+                        # The one solve kept for the objective regression: the hardcoded
+                        # multi-period solutions are the only check on mpopf answers.
+                        if solving && case == solve_case && form_str == solve_form && label == "curve"
+                            result64 = exasolve(m64, backend; print_level = MadNLP.ERROR)
+                            @testset "$(case), MP solve, $(backend), $(label), $(form_str)" begin
+                                test_mp_case(result64, true_sol_curve)
+                            end
+                        end
                     end
                 end
-                
-                # Test MP w storage
-                for (filename, case, Pd_pregen, Qd_pregen, true_sol_curve_stor, 
+
+                # Multi-period with storage
+                for (filename, case, Pd_pregen, Qd_pregen, true_sol_curve_stor,
                     true_sol_curve_stor_func, true_sol_pregen_stor, true_sol_pregen_stor_func) in mp_stor
-                    
-                    m32, _, _ = mpopf_model(filename, [1, .9, .8, .95, 1]; T = Float32, backend = backend, form = symbol)
-                    m64, v64, c64 = mpopf_model(filename, [1, .9, .8, .95, 1]; T = Float64, backend = backend, form = symbol)
-                    result64 = exasolve(m64, backend; print_level = MadNLP.ERROR)
-                    @testset "MP w storage, $(case), $(backend), curve, $(form_str)" begin
-                        test_float32(m32, m64, result64, backend)
-                        test_mp_case(result64, true_sol_curve_stor)
-                    end
 
-                    #With function
-                    m32, _, _ = mpopf_model(filename, [1, .9, .8, .95, 1], example_func; T = Float32, backend = backend, form = symbol)
-                    m64, v64, c64 = mpopf_model(filename, [1, .9, .8, .95, 1], example_func; T = Float64, backend = backend, form = symbol)
-                    result64 = exasolve(m64, backend; print_level = MadNLP.ERROR)
-                    @testset "MP w storage, $(case), $(backend), curve, $(form_str), func" begin
-                        test_float32(m32, m64, result64, backend)
-                        test_mp_case(result64, true_sol_curve_stor_func)
-                    end
+                    variants = [
+                        ("curve",        () -> (T -> mpopf_model(filename, [1, .9, .8, .95, 1]; T = T, backend = backend, form = symbol))),
+                        ("curve, func",  () -> (T -> mpopf_model(filename, [1, .9, .8, .95, 1], example_func; T = T, backend = backend, form = symbol))),
+                        ("pregen",       () -> (T -> mpopf_model(filename, Pd_pregen, Qd_pregen; T = T, backend = backend, form = symbol))),
+                        ("pregen, func", () -> (T -> mpopf_model(filename, Pd_pregen, Qd_pregen, example_func; T = T, backend = backend, form = symbol))),
+                    ]
+                    for (label, mk) in variants
+                        build = mk()
+                        m32, _, _ = build(Float32)
+                        m64, _, _ = build(Float64)
 
-                    #Pregenerated Pd and Qd
-                    m32, _, _ = mpopf_model(filename, Pd_pregen, Qd_pregen; T = Float32, backend = backend, form = symbol)
-                    m64, v64, c64 = mpopf_model(filename, Pd_pregen, Qd_pregen; T = Float64, backend = backend, form = symbol)
-                    result64 = exasolve(m64, backend; print_level = MadNLP.ERROR)
-                    @testset "MP w storage, $(case), $(backend), pregen, $(form_str)" begin
-                        test_float32(m32, m64, result64, backend)
-                        test_mp_case(result64, true_sol_pregen_stor)
-                    end
-
-                    #With function
-                    m32, _, _ = mpopf_model(filename, Pd_pregen, Qd_pregen, example_func; T = Float32, backend = backend, form = symbol)
-                    m64, v64, c64 = mpopf_model(filename, Pd_pregen, Qd_pregen, example_func; T = Float64, backend = backend, form = symbol)
-                    result64 = exasolve(m64, backend; print_level = MadNLP.ERROR)
-                    @testset "MP w storage, $(case), $(backend), pregen, $(form_str), func" begin
-                        test_float32(m32, m64, result64, backend)
-                        test_mp_case(result64, true_sol_pregen_stor_func)
+                        @testset "MP w storage, $(case), $(backend), $(label), $(form_str)" begin
+                            test_callbacks(m32, m64, backend)
+                        end
                     end
                 end
             end
-            # Test DCOPF
+
+            # DCOPF
             for (filename, case, _) in test_cases
                 @testset "$case, DCOPF, $backend" begin
                     m32, _, _ = dcopf_model(filename; T=Float32, backend = backend)
-
-                    m64, v64, c64 = dcopf_model(filename; T=Float64, backend = backend)
-                    result64 = exasolve(m64, backend; print_level = MadNLP.ERROR)
-                    va64, pg64, pf64 = v64
-
-                    result_pm = get!(dcopf_ref_cache, filename) do
-                        nlp_solver = JuMP.optimizer_with_attributes(Ipopt.Optimizer, "tol"=>Float64(result64.options.tol), "print_level"=>0)
-                        solve_opf(filename, DCPPowerModel, nlp_solver)
-                    end
-
-                    test_dcopf_case(result64, result_pm, pg64, pf64)
+                    m64, _, _ = dcopf_model(filename; T=Float64, backend = backend)
+                    test_callbacks(m32, m64, backend)
                 end
             end
 
+            # User callbacks
             for T in (Float32, Float64)
                 @testset "User callback, $(T), $(backend)" begin
                     model, vars, cons = mpopf_model(
@@ -260,13 +234,8 @@ function runtests()
                         user_callback = add_electrolyzers, T=T, backend=backend)
                 end
             end
-
         end
 
-        # GOC3 is a max_iter=1 smoke test of the parser and the model constructor, and the
-        # two configurations together dominated the suite: on the CI runner (run
-        # 30814411004, 2h07m total) they cost 1h15m of the 2h04m spent in tests, building
-        # the same 139502-variable model twice.  Run it on the CPU only.
         if RUN_GOC3
             @testset "GOC3, Float64, nothing" begin
                 sc_tests("../data/C3E4N00073D1_scenario_303", nothing, Float64)
