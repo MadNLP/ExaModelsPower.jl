@@ -11,13 +11,28 @@ permissions:
   actions: write
   contents: read
 
+# A test run takes over two hours on the self-hosted GPU runners, so a second push to a
+# pull request otherwise leaves two full runs of the same branch competing for the pool.
+# Superseded pull-request runs are cancelled; runs on main are left alone so that every
+# merged commit still reports coverage.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   test:
+    name: test (${{ matrix.selection }})
     runs-on:
       labels: cuda13
     strategy:
+      # One slice failing should not cancel the others; they are independent, and GOC3 is
+      # much the longest, so cancelling it on an unrelated backend failure wastes the run.
+      fail-fast: false
       matrix:
         julia-version: ['1']
+        # Each backend, and the GOC3 smoke test, run as their own job so that the wall
+        # clock is the slowest slice rather than the sum of all of them.
+        selection: ['nothing', 'cpu', 'cuda', 'goc3']
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -26,6 +41,8 @@ jobs:
           channel: ${{ matrix.julia-version }}
       - name: Run tests
         shell: julia --project=. --color=yes {0}
+        env:
+          EMP_TEST_SELECTION: ${{ matrix.selection }}
         run: |
           using Pkg;
           Pkg.Registry.update()
@@ -36,4 +53,7 @@ jobs:
       - uses: codecov/codecov-action@v5
         with:
           files: lcov.info
+          # Each slice covers a different part of src; flag them so Codecov merges the
+          # four partial reports for a commit instead of treating them as replacements.
+          flags: ${{ matrix.selection }}
           token: ${{ secrets.CODECOV_TOKEN }}

@@ -7,6 +7,12 @@ on:
     tags: '*'
   pull_request:
 
+# The docs build shares the self-hosted GPU runners with CI, so drop superseded
+# pull-request builds instead of queueing them behind the test job.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   build:
     runs-on:
