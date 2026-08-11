@@ -10,7 +10,7 @@ JSON = "682c06a0-de6a-54ab-a142-c8b1cf79cde6"
 
 [compat]
 CUDA = "6"
-ExaModels = "0.11"
+ExaModels = "0.10, 0.11"
 ExaPowerIO = "0.3"
 JSON = "0.21"
 MadNLP = "0.10"
