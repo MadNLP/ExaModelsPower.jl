@@ -78,30 +78,6 @@ _default_start(::Type{T}) where {T} =
 _resolve_start(f, data) = f(data)
 _resolve_start(v::Union{Number,AbstractVector,Base.Generator}, data) = v
 
-# ── Rows travel as plain NamedTuples ─────────────────────────────────────────
-#
-# An `ExaCore` stores the collection each generator iterated over, so a table of
-# `ExaPowerIO.BusData` puts that package's types *inside* the core. In Julia
-# that is invisible; for `ExaModelsC` it is fatal. The app it generates
-# deserializes the core, and `Serialization` resolves a type's module only among
-# modules that are LOADED — so a core naming a package the generated app
-# neither depends on nor imports fails to precompile with
-#
-#     KeyError: key Base.PkgId(UUID("14903efe-…"), "ExaPowerIO") not found
-#
-# measured on ExaModels main `63f6f993`, case14, before juliac is even reached.
-#
-# Converting each row to a `NamedTuple` of the same field names fixes that here
-# rather than in ExaModels. Every field is an `Int`, a `T`, or an
-# `NTuple{3,T}`, so the rows stay isbits and GPU-transferable; `b.f_bus` and
-# `g.c[1]` in constraint.jl read exactly as before; and the core is then built
-# out of Base types alone, which is what lets it compile against an unmodified
-# ExaModels.
-_row(x::R) where {R} =
-    NamedTuple{fieldnames(R)}(ntuple(i -> getfield(x, i), Val(fieldcount(R))))
-_rows(v::AbstractVector) = [_row(x) for x in v]
-_rows(v::AbstractVector{<:NamedTuple}) = v
-
 """
     ac_opf_args(filename; T = Float64, backend = nothing, start = (;))
         -> (data,)
@@ -130,7 +106,7 @@ ac_opf_args(filename; T = Float64, backend = nothing, start = (;)) =
 function ac_opf_args(filename, ::Type{T}, backend = nothing, start = (;)) where {T}
     p = parse_ac_power_data(filename, T)
     s = merge(_default_start(T), NamedTuple(start))
-    bus, gen, arc, branch = _rows(p.bus), _rows(p.gen), _rows(p.arc), _rows(p.branch)
+    bus, gen, arc, branch = p.bus, p.gen, p.arc, p.branch
     nbus, ngen, narc, nbranch = length(bus), length(gen), length(arc), length(branch)
 
     # EXACTLY the fields the model bodies read, and no more. `map` over a
