@@ -24,6 +24,12 @@ for name in filter(names(@__MODULE__; all = true)) do x
 end
     @eval export $name
 end
+
+# The loop above exports every `*_model` constructor. A model written as a
+# recipe has two more halves that a caller needs by name — the recipe itself and
+# the arguments that close it — plus the eagerly-built core that `ExaModelsC`
+# compiles. Neither ends in "model", so they are named here.
+export ac_opf_recipe, ac_opf_args, ac_opf_core
     
 function __init__()
     if haskey(ENV, "EXA_MODELS_DEPOT")
