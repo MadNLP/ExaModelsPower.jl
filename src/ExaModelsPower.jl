@@ -31,13 +31,19 @@ end
 # compiles. Neither ends in "model", so they are named here.
 export ac_opf_recipe, ac_opf_args, ac_opf_core
     
+# A `const Ref`, not a plain global. `global TMPDIR = ...` leaves the binding
+# typed `Any`, and `mkpath(TMPDIR::Any)` is then an unresolved call that
+# `juliac --trim=safe` refuses — `__init__` is part of the compiled image.
+const TMPDIR = Ref{String}("")
+
 function __init__()
     if haskey(ENV, "EXA_MODELS_DEPOT")
-        global TMPDIR = ENV["EXA_MODELS_DEPOT"]
+        TMPDIR[] = ENV["EXA_MODELS_DEPOT"]
     else
-        global TMPDIR = joinpath(@__DIR__,"..","data")
-        mkpath(TMPDIR)
+        TMPDIR[] = joinpath(@__DIR__, "..", "data")
+        mkpath(TMPDIR[])
     end
+    return nothing
 end
 
 end # module ExaModelsPower

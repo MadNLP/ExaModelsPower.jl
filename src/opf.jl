@@ -121,37 +121,54 @@ args = ac_opf_args("pglib_opf_case118_ieee.m"; start = (vm = d -> d.vm0, va = d 
 model = ExaModel(ac_opf_recipe()[1], args...)
 ```
 """
-function ac_opf_args(filename; T = Float64, backend = nothing, start = (;))
-    parsed = parse_ac_power_data(filename, T)
-    data = (;
-        parsed...,
-        bus = _rows(parsed.bus),
-        gen = _rows(parsed.gen),
-        arc = _rows(parsed.arc),
-        branch = _rows(parsed.branch),
-    )
+ac_opf_args(filename; T = Float64, backend = nothing, start = (;)) =
+    ac_opf_args(filename, T, backend, start)
 
+# The positional method is the one a compiled library calls: `::Type{T}` makes
+# `T` a static parameter, where the keyword form leaves it a `Type`-typed value
+# that nothing downstream can specialize on.
+function ac_opf_args(filename, ::Type{T}, backend = nothing, start = (;)) where {T}
+    p = parse_ac_power_data(filename, T)
     s = merge(_default_start(T), NamedTuple(start))
-    nbus, ngen, narc, nbranch =
-        length(data.bus), length(data.gen), length(data.arc), length(data.branch)
+    bus, gen, arc, branch = _rows(p.bus), _rows(p.gen), _rows(p.arc), _rows(p.branch)
+    nbus, ngen, narc, nbranch = length(bus), length(gen), length(arc), length(branch)
 
+    # EXACTLY the fields the model bodies read, and no more. `map` over a
+    # NamedTuple — which is what `convert_data` is — stays inferable up to 31
+    # fields and gives up at 32 (measured, this Julia); passing the parse
+    # through whole came to 35, and the result was a `NamedTuple` with concrete
+    # names and no value types at all. That one abstract value was enough to
+    # leave `ExaModel(CORE, data)` unresolved under `--trim=safe`.
+    #
+    # Nothing is lost by narrowing: the fields dropped here — `baseMVA`,
+    # `storage`, `vm0`/`va0`/`pg0`/`qg0` and the storage ratings — are inputs to
+    # the starting points, which are resolved just below and travel as the
+    # `*_start` arrays.
     data = (;
-        data...,
+        bus, gen, arc, branch,
+        ref_buses = p.ref_buses,
+        vmin = p.vmin, vmax = p.vmax,
+        pmin = p.pmin, pmax = p.pmax,
+        qmin = p.qmin, qmax = p.qmax,
+        angmin = p.angmin, angmax = p.angmax,
+        rate_a = p.rate_a,
         # Broadcasting a placeholder is refused by design, so the rectangular
         # form's squared voltage bounds are computed here, beside the parse.
-        vmin2 = data.vmin .^ 2,
-        vmax2 = data.vmax .^ 2,
+        vmin2 = p.vmin .^ 2,
+        vmax2 = p.vmax .^ 2,
         # The thermal limits are one-sided; the bound array used to be built
         # with `fill!(similar(...), -Inf)` against a length only known later.
         branch_ninf = fill(T(-Inf), nbranch),
-        va_start = opf_start(_resolve_start(s.va, data), nbus, T),
-        vm_start = opf_start(_resolve_start(s.vm, data), nbus, T),
-        vr_start = opf_start(_resolve_start(s.vr, data), nbus, T),
-        vim_start = opf_start(_resolve_start(s.vim, data), nbus, T),
-        pg_start = opf_start(_resolve_start(s.pg, data), ngen, T),
-        qg_start = opf_start(_resolve_start(s.qg, data), ngen, T),
-        p_start = opf_start(_resolve_start(s.p, data), narc, T),
-        q_start = opf_start(_resolve_start(s.q, data), narc, T),
+        # Resolved against the FULL parse, so `start = (vm = d -> d.vm0,)`
+        # still reaches a field the model itself never sees.
+        va_start = opf_start(_resolve_start(s.va, p), nbus, T),
+        vm_start = opf_start(_resolve_start(s.vm, p), nbus, T),
+        vr_start = opf_start(_resolve_start(s.vr, p), nbus, T),
+        vim_start = opf_start(_resolve_start(s.vim, p), nbus, T),
+        pg_start = opf_start(_resolve_start(s.pg, p), ngen, T),
+        qg_start = opf_start(_resolve_start(s.qg, p), ngen, T),
+        p_start = opf_start(_resolve_start(s.p, p), narc, T),
+        q_start = opf_start(_resolve_start(s.q, p), narc, T),
     )
 
     return (convert_data(data, backend),)
