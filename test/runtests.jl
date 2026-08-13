@@ -54,10 +54,10 @@ mp_stor_test_cases = [("../data/pglib_opf_case3_lmbd_mod.m", "case3", "../data/c
                         ("../data/pglib_opf_case5_pjm_mod.m", "case5", "../data/case5_5split.Pd", "../data/case5_5split.Qd",
                         true_sol_case5_curve_stor, true_sol_case5_curve_stor_func, true_sol_case5_pregen_stor, true_sol_case5_pregen_stor_func)]
 
-static_forms = [("rect", :rect, ACRPowerModel, test_rect_voltage),
-                ("polar", :polar, ACPPowerModel, test_polar_voltage)]
+static_forms = [("rect", Rect(), ACRPowerModel, test_rect_voltage),
+                ("polar", Polar(), ACPPowerModel, test_polar_voltage)]
 
-mp_forms = [("rect", :rect), ("polar", :polar)]
+mp_forms = [("rect", Rect()), ("polar", Polar())]
 
 function example_func(d, srating)
     return d + 20/srating*d^2

@@ -180,9 +180,8 @@ end
 
 The formulation a model is built in: [`Polar`](@ref), [`Rect`](@ref) or
 [`DC`](@ref). Passed as an instance — `opf_model(file; form = Rect())` — so the
-choice is part of the TYPE the compiler sees; `form = :rect` is accepted for
-compatibility and resolved through [`opf_form`](@ref), at the price of the call
-being type-unstable.
+choice is part of the TYPE the compiler sees. (Symbols were the pre-0.4
+spelling; they made every call through them type-unstable and are gone.)
 """
 abstract type OPFForm end
 
@@ -195,20 +194,7 @@ struct Rect <: OPFForm end
 "The DC linearization: `va` only, flows per branch, no reactive half."
 struct DC <: OPFForm end
 
-"""
-    opf_form(form) -> OPFForm
 
-The identity on an [`OPFForm`](@ref) instance; resolves the compatibility
-Symbols `:polar`, `:rect`, `:dc`. Every entry point funnels its `form` through
-here, so both spellings work everywhere — but only the instance spelling is
-type-stable, since a Symbol's meaning is a run-time fact.
-"""
-opf_form(f::OPFForm) = f
-opf_form(s::Symbol) =
-    s === :polar ? Polar() :
-    s === :rect ? Rect() :
-    s === :dc ? DC() :
-    error("Invalid coordinate symbol - valid options are :polar, :rect or :dc")
 
 # ── variables ────────────────────────────────────────────────────────────────
 
@@ -357,17 +343,17 @@ See [`opf_core`](@ref) for the form `ExaModelsC` compiles.
 # Arguments
 - `backend`: the array backend to build against. Default `nothing` (CPU).
 - `T`: the numeric type (default `Float64`).
-- `form`: voltage representation, `:polar` or `:rect`. Default `:polar`.
+- `form`: the formulation, an [`OPFForm`](@ref) instance — `Polar()` (default), `Rect()` or `DC()`.
 - `user_callback`: user function that extends the model.
 """
 function opf_recipe(;
     backend = nothing,
     T = Float64,
-    form = Polar(),
+    form::OPFForm = Polar(),
     user_callback = dummy_extension,
 )
     core, data = ExaCore(T; backend = backend, nargs = Val(1))
-    return build_opf(core, opf_form(form), data, user_callback, T)
+    return build_opf(core, form, data, user_callback, T)
 end
 
 """
@@ -394,13 +380,13 @@ function opf_core(
     filename;
     backend = nothing,
     T = Float64,
-    form = Polar(),
+    form::OPFForm = Polar(),
     user_callback = dummy_extension,
     start = (;),
 )
     data, = opf_args(filename; T = T, backend = backend, start = start)
     core = ExaCore(T; backend = backend)
-    return build_opf(core, opf_form(form), data, user_callback, T)
+    return build_opf(core, form, data, user_callback, T)
 end
 
 """
@@ -417,7 +403,7 @@ definition rather than two.
 - `filename::String`: Path to the data file.
 - `backend`: The solver backend to use. Default if nothing.
 - `T`: The numeric type to use (default is `Float64`).
-- `form`: Voltage representation, either `:polar` or `:rect`. Default is `:polar`.
+- `form`: the formulation, an [`OPFForm`](@ref) instance — `Polar()` (default), `Rect()` or `DC()`.
 - `user_callback`: User function that extends the model
 - `start`: Starting-point overrides; see [`opf_args`](@ref).
 - `kwargs...`: Additional keyword arguments passed to the model builder.
@@ -432,7 +418,7 @@ function opf_model(
     filename;
     backend = nothing,
     T = Float64,
-    form = Polar(),
+    form::OPFForm = Polar(),
     user_callback = dummy_extension,
     start = (;),
     kwargs...,

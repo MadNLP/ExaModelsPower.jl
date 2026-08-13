@@ -377,11 +377,11 @@ are BUILD-time facts — the body slices `genarray[:, 2:N]` and storage changes
 how many variable blocks there are — so a compiled library is per-(N, curve,
 storage-shape). Close it with [`mpopf_args`](@ref).
 """
-function mpopf_recipe(; N, Nbus, has_storage = false, form = Polar(), backend = nothing,
+function mpopf_recipe(; N, Nbus, has_storage = false, form::OPFForm = Polar(), backend = nothing,
                       T = Float64, user_callback = dummy_extension,
                       storage_complementarity_constraint = false)
     core, data = ExaCore(T; backend = backend, nargs = Val(1))
-    return build_mpopf_body(core, opf_form(form), data, N, Nbus, user_callback, T;
+    return build_mpopf_body(core, form, data, N, Nbus, user_callback, T;
         storage_complementarity_constraint, has_storage)
 end
 
@@ -391,20 +391,19 @@ end
 The same multi-period model built eagerly — the form `ExaModelsC` compiles as a
 fixed model.
 """
-function mpopf_core(filename, curve; N = length(curve), form = Polar(), backend = nothing,
+function mpopf_core(filename, curve; N = length(curve), form::OPFForm = Polar(), backend = nothing,
                     T = Float64, user_callback = dummy_extension,
                     corrective_action_ratio = 0.1,
                     storage_complementarity_constraint = false)
     data, = mpopf_args(filename, curve; N, T, backend, corrective_action_ratio)
     core = ExaCore(T; backend = backend)
-    return build_mpopf_body(core, opf_form(form), data, N, length(data.bus), user_callback, T;
+    return build_mpopf_body(core, form, data, N, length(data.bus), user_callback, T;
         storage_complementarity_constraint, has_storage = length(data.storarray) > 0)
 end
 
 function build_mpopf(data, Nbus, N, form, user_callback; backend = nothing, T = Float64, storage_complementarity_constraint = false, kwargs...)
     core = ExaCore(T; backend = backend)
 
-    form = opf_form(form)
     core, vars, cons = build_base_mpopf(core, form, data, N)
     core, vars, cons = add_mpopf_cons(core, form, data, N, Nbus, vars, cons, T)
 
@@ -425,7 +424,6 @@ end
 function build_mpopf(data, Nbus, N, discharge_func::Function, form, user_callback; backend = nothing, T = Float64, kwargs...)
     core = ExaCore(T; backend = backend)
 
-    form = opf_form(form)
     core, vars, cons = build_base_mpopf(core, form, data, N)
     core, vars, cons = add_mpopf_cons(core, form, data, N, Nbus, vars, cons, T)
 
@@ -616,7 +614,7 @@ Construct a multi-period AC optimal power flow (MPOPF) model using different for
 - `N::Int`: Number of time periods (inferred if not provided).
 - `corrective_action_ratio::Float64`: Ratio of corrective power action allowed (default = 0.1).
 - `backend`: Optimization solver backend (deault = nothing).
-- `form::Symbol`: Power flow formulation, either `:polar` or `:rect` (default = `:polar`).
+- `form::OPFForm`: the formulation — `Polar()` (default), `Rect()` or `DC()`.
 - `T::Type`: Floating-point type for numeric variables (default = `Float64`).
 - `storage_complementarity_constraint::Bool`: Whether to enforce complementarity for storage (only for some methods, default = false).
 - `user_callback`: User function that extends the model
@@ -640,7 +638,7 @@ function mpopf_model(
     N = length(curve),
     corrective_action_ratio = 0.1,
     backend = nothing,
-    form = Polar(),
+    form::OPFForm = Polar(),
     T = Float64,
     storage_complementarity_constraint = false,
     user_callback = dummy_extension,
@@ -651,7 +649,6 @@ function mpopf_model(
     data, = mpopf_args(filename, curve; N, T, backend, corrective_action_ratio)
     Nbus = length(data.bus)
 
-    form = opf_form(form)
     return build_mpopf(data, Nbus, N, form, user_callback, backend = backend, T = T, storage_complementarity_constraint = storage_complementarity_constraint, kwargs...)
 
 end
@@ -663,7 +660,7 @@ function mpopf_model(
     N = size(pd, 2),
     corrective_action_ratio = 0.1,
     backend = nothing,
-    form = Polar(),
+    form::OPFForm = Polar(),
     T = Float64,
     storage_complementarity_constraint = false,
     user_callback = dummy_extension,
@@ -676,7 +673,6 @@ function mpopf_model(
     Nbus = length(data.bus)
     @assert Nbus == size(pd, 1)
 
-    form = opf_form(form)
     return build_mpopf(data, Nbus, N, form, user_callback, backend = backend, T = T, storage_complementarity_constraint = storage_complementarity_constraint, kwargs...)
 
 end
@@ -687,7 +683,7 @@ function mpopf_model(
     N = length(curve),
     corrective_action_ratio = 0.1,
     backend = nothing,
-    form = Polar(),
+    form::OPFForm = Polar(),
     T = Float64,
     user_callback = dummy_extension,
     kwargs...,
@@ -697,7 +693,6 @@ function mpopf_model(
     data, = mpopf_args(filename, curve; N, T, backend, corrective_action_ratio)
     Nbus = length(data.bus)
 
-    form = opf_form(form)
     return build_mpopf(data, Nbus, N, discharge_func, form,user_callback, backend = backend, T = T, kwargs...)
 
 end
@@ -709,7 +704,7 @@ function mpopf_model(
     N = size(pd, 2),
     corrective_action_ratio = 0.1,
     backend = nothing,
-    form = Polar(),
+    form::OPFForm = Polar(),
     T = Float64,
     storage_complementarity_constraint = false,
     user_callback = dummy_extension,
@@ -723,7 +718,6 @@ function mpopf_model(
     Nbus = length(data.bus)
     @assert Nbus == size(pd, 1)
 
-    form = opf_form(form)
     return build_mpopf(data, Nbus, N, discharge_func, form,user_callback, backend = backend, T = T, kwargs...)
 end
 
