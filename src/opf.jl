@@ -128,6 +128,13 @@ function ac_opf_args(filename, ::Type{T}, backend = nothing, start = (;)) where 
         qmin = p.qmin, qmax = p.qmax,
         angmin = p.angmin, angmax = p.angmax,
         rate_a = p.rate_a,
+        # Per BRANCH, not per arc. `dcopf`'s `pf` is a branch-length block and
+        # was bounded by the arc-length `rate_a`; that lands on the right
+        # values only because the first `nbranch` arcs happen to be the
+        # from-arcs in branch order (measured identical, 0 differences, on
+        # case14, case118 and case9241_pegase). Correct by construction rather
+        # than by that coincidence.
+        branch_rate_a = [br.rate_a for br in p.branch],
         # Broadcasting a placeholder is refused by design, so the rectangular
         # form's squared voltage bounds are computed here, beside the parse.
         vmin2 = p.vmin .^ 2,

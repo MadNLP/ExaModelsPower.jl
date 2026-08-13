@@ -9,8 +9,8 @@ function build_dcopf(data, user_callback; backend = nothing, T = Float64, core =
 
     @add_var(core, pf,
         length(data.branch);
-        lvar = -data.rate_a,
-        uvar = data.rate_a
+        lvar = -data.branch_rate_a,
+        uvar = data.branch_rate_a
     )
 
     @add_obj(core, o, gen_cost(g, pg[g.i]) for g in data.gen)
@@ -86,8 +86,7 @@ function dcopf_model(
     user_callback = dummy_extension,
     kwargs...,
 )
-    data = parse_ac_power_data(filename, T)
-    data = convert_data(data, backend)
+    data, = ac_opf_args(filename; T = T, backend = backend)
 
     return build_dcopf(data, user_callback; backend = backend, T = T, kwargs...)
 

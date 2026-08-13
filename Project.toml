@@ -25,9 +25,10 @@ JuMP = "4076af6c-e467-56ae-b986-b466b2749572"
 KernelAbstractions = "63c18a36-062a-441e-b654-da1e3ab1ce7c"
 MadNLP = "2621e9c9-9eb4-46b1-8089-e8c72242dfb6"
 MadNLPGPU = "d72a61cc-809d-412f-99be-fd81f4b8a598"
+NLPModels = "a4795742-8479-5a75-8586-d0e921d3a0a2"
 NLPModelsJuMP = "792afdf1-32c1-5681-94e0-d7bf7a5df49e"
 PowerModels = "c36e90e8-916a-50a6-bd94-075b64ef4655"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [targets]
-test = ["Test", "MadNLP", "MadNLPGPU", "KernelAbstractions", "CUDA", "CUDSS", "Ipopt", "JuMP", "NLPModelsJuMP", "PowerModels"]
+test = ["Test", "MadNLP", "MadNLPGPU", "KernelAbstractions", "CUDA", "CUDSS", "Ipopt", "JuMP", "NLPModels", "NLPModelsJuMP", "PowerModels"]
