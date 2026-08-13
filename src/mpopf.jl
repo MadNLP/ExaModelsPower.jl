@@ -130,10 +130,18 @@ function add_thermal_mp!(core, ::Union{Polar,Rect}, data, F)
 end
 add_thermal_mp!(core, ::DC, data, F) = (core, (;))
 
-# A compiled multi-period library needs a ONE-argument, package-owned function
-# to call: the generated app resolves it by name from another process, so a
-# closure over the curve cannot be reached. The curve and horizon are
-# compile-time facts anyway, so they live here as constants.
+"""
+    MPOPF_DEFAULT_CURVE
+
+The load curve behind [`mpopf_args_default`](@ref): `[1.0, 0.9, 0.8, 0.95, 1.0]`.
+
+A compiled multi-period library needs a ONE-argument, package-owned function to
+call — the generated app resolves it by name from another process, so a closure
+over a curve cannot be reached. The curve and horizon are compile-time facts of
+such a library anyway, so the default lives here as a constant; a different
+curve means defining your own one-argument wrapper over [`mpopf_args`](@ref) in
+your own package.
+"""
 const MPOPF_DEFAULT_CURVE = [1.0, 0.9, 0.8, 0.95, 1.0]
 
 """
