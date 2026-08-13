@@ -415,9 +415,17 @@ function opf_model(
     kwargs...,
 )
     core, vars, cons =
-        ac_opf_recipe(; backend = backend, T = T, form = form, user_callback = user_callback)
+        opf_recipe(; backend = backend, T = T, form = form, user_callback = user_callback)
     args = opf_args(filename; T = T, backend = backend, start = start)
-    return ExaModel(core, args...; prod = true, kwargs...), vars, cons
+    model = ExaModel(core, args...; prod = true, kwargs...)
+    # The handles come out of the RECIPE, so their offsets are ArgNode
+    # expressions; `solution(result, v)` cannot index with those. Resolve them
+    # against the same arguments the model was built from. This was lost once
+    # already, in the entry-point unification — test_solution_handles is the
+    # regression test that catches it.
+    return model,
+           ExaModels.instantiate(vars, args...),
+           ExaModels.instantiate(cons, args...)
 end
 
 # Takes the core and hands it back: `@add_var` and `@add_con` rebind their
