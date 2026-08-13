@@ -5,14 +5,15 @@ using DelimitedFiles
 using ExaPowerIO
 using JSON
 
-include("parser.jl")
-include("constraint.jl")
-include("opf.jl")
-include("dcopf.jl")
-include("goc3_parser.jl")
-include("scopf.jl")
-include("mpopf.jl")
-include("sc_parser.jl")
+# Parsers and data stay separate from the models that consume them.
+include("parser.jl")          # matpower -> the tables every model is built from
+include("constraint.jl")      # the algebraic expressions, shared by all three
+include("goc3_parser.jl")     # GOC3-specific parsing
+include("sc_parser.jl")       #   "
+
+include("opf.jl")             # static: polar, rect, DC
+include("mpopf.jl")           # multi-period: polar, rect, DC
+include("goc3.jl")            # security-constrained, GOC3 formulation
 
 const NAMES = filter(names(@__MODULE__; all = true)) do x
     str = string(x)
