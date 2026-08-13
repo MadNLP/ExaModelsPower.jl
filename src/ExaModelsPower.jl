@@ -33,6 +33,8 @@ end
 export opf_recipe, opf_args, opf_core, opf_model
 export ac_opf_recipe, ac_opf_args, ac_opf_core
 export dcopf_recipe, dcopf_core
+export mpopf_recipe, mpopf_args, mpopf_core
+export mpopf_args_default, MPOPF_DEFAULT_CURVE
     
 # A `const Ref`, not a plain global. `global TMPDIR = ...` leaves the binding
 # typed `Any`, and `mkpath(TMPDIR::Any)` is then an unresolved call that

@@ -2,7 +2,12 @@
 # tuple from an iterator whose element types inference cannot pin one by one,
 # so the result is a `NamedTuple{names}` with no value types — concrete names,
 # abstract contents. `map` over a NamedTuple is inferable elementwise.
-convert_data(data::NamedTuple, backend) = map(d -> convert_array(d, backend), data)
+# Recurses into a nested NamedTuple. The multi-period arguments group their
+# N-expanded bound matrices under one field, because there are enough of them
+# to push a flat tuple past the 31-field limit above.
+convert_data(data::NamedTuple, backend) = map(d -> _convert_field(d, backend), data)
+_convert_field(d, backend) = convert_array(d, backend)
+_convert_field(d::NamedTuple, backend) = convert_data(d, backend)
 
 # `T` is a TYPE PARAMETER, not a value of type `Type`. As a plain positional
 # argument it arrives typed `Type` — abstract — and then `parse_matpower(T, …)`

@@ -1,22 +1,28 @@
-function parse_mp_power_data(filename, N, corrective_action_ratio, T = Float64)
+# `::Type{T}`, not a `Type`-typed value — the same fault the static parser had:
+# as a plain argument it arrives abstract and `parse_ac_power_data` cannot
+# specialize, so every field read off the result widens.
+parse_mp_power_data(filename, N, r) = parse_mp_power_data(filename, N, r, Float64)
+function parse_mp_power_data(filename, N, corrective_action_ratio, ::Type{T}) where {T}
 
-    data = parse_ac_power_data(filename, T)
+    raw = parse_ac_power_data(filename, T)
 
-    nbus = length(data.bus)
+    nbus = length(raw.bus)
 
-    empty_stor = Vector{NamedTuple{(:c, :Einit, :etac, :etad, :Srating, :Zr, :Zim, :Pexts, :Qexts, :bus, :t), Tuple{Int64, Float32, Float32, Float32, Float32, Float32, Float32, Float32, Float32, Int64, Int64}}}()
-
+    # No empty-storage ternary: its two branches had DIFFERENT types (a vector
+    # of one NamedTuple shape against a matrix of another), which made the whole
+    # return non-concrete — the same fault the static parser had. A comprehension
+    # over empty storage is a well-typed 0xN matrix on its own.
     data = (
         ;
-        data...,
-        refarray = [(i,t) for i in data.ref_buses, t in 1:N],
-        barray = [(;b, t = t) for b in data.branch, t in 1:N ],
-        busarray = [(;b, t = t) for b in data.bus, t in 1:N ],
-        arcarray = [(;a, t = t) for a in data.arc, t in 1:N ],
-        genarray = [(;g, t = t) for g in data.gen, t in 1:N ],
-        storarray = isempty(data.storage) ? empty_data =  empty_stor : [(;s, t = t) for s in data.storage, t in 1:N],
-        branch_rate_a = [br.rate_a for br in data.branch],
-        Δp = corrective_action_ratio .* (data.pmax .- data.pmin)
+        raw...,
+        refarray = [(i,t) for i in raw.ref_buses, t in 1:N],
+        barray = [(;b, t = t) for b in raw.branch, t in 1:N ],
+        busarray = [(;b, t = t) for b in raw.bus, t in 1:N ],
+        arcarray = [(;a, t = t) for a in raw.arc, t in 1:N ],
+        genarray = [(;g, t = t) for g in raw.gen, t in 1:N ],
+        storarray = [(;s, t = t) for s in raw.storage, t in 1:N],
+        branch_rate_a = [br.rate_a for br in raw.branch],
+        Δp = corrective_action_ratio .* (raw.pmax .- raw.pmin)
     )
 
     return data
@@ -90,25 +96,25 @@ end
 # and no thermal limits. The ramp rate is on `pg` and carries over unchanged.
 
 function add_gen_vars_mp!(core, ::Union{Polar,Rect}, data, N)
-    @add_var(core, pg, size(data.gen, 1), N; lvar = repeat(data.pmin, 1, N), uvar = repeat(data.pmax, 1, N))
-    @add_var(core, qg, size(data.gen, 1), N; lvar = repeat(data.qmin, 1, N), uvar = repeat(data.qmax, 1, N))
+    @add_var(core, pg, length(data.gen), N; lvar = data.rep.pmin, uvar = data.rep.pmax)
+    @add_var(core, qg, length(data.gen), N; lvar = data.rep.qmin, uvar = data.rep.qmax)
     return core, (; pg, qg)
 end
 
 function add_gen_vars_mp!(core, ::DC, data, N)
-    @add_var(core, pg, size(data.gen, 1), N; lvar = repeat(data.pmin, 1, N), uvar = repeat(data.pmax, 1, N))
+    @add_var(core, pg, length(data.gen), N; lvar = data.rep.pmin, uvar = data.rep.pmax)
     return core, (; pg)
 end
 
 function add_flow_vars_mp!(core, ::Union{Polar,Rect}, data, N)
-    @add_var(core, p, size(data.arc, 1), N; lvar = repeat(-data.rate_a, 1, N), uvar = repeat(data.rate_a, 1, N))
-    @add_var(core, q, size(data.arc, 1), N; lvar = repeat(-data.rate_a, 1, N), uvar = repeat(data.rate_a, 1, N))
+    @add_var(core, p, length(data.arc), N; lvar = data.rep.nrate_a, uvar = data.rep.rate_a)
+    @add_var(core, q, length(data.arc), N; lvar = data.rep.nrate_a, uvar = data.rep.rate_a)
     return core, (; p, q)
 end
 
 function add_flow_vars_mp!(core, ::DC, data, N)
-    @add_var(core, pf, size(data.branch, 1), N;
-        lvar = repeat(-data.branch_rate_a, 1, N), uvar = repeat(data.branch_rate_a, 1, N))
+    @add_var(core, pf, length(data.branch), N;
+        lvar = data.rep.nbranch_rate_a, uvar = data.rep.branch_rate_a)
     return core, (; pf)
 end
 
@@ -116,13 +122,91 @@ end
 function add_thermal_mp!(core, ::Union{Polar,Rect}, data, F)
     @add_con(core, c_from_thermal_limit,
         c_thermal_limit(b, F.p[b.f_idx, t], F.q[b.f_idx, t]) for (b, t) in data.barray;
-        lcon = fill(-Inf, size(data.barray)))
+        lcon = data.rep.ninf_b)
     @add_con(core, c_to_thermal_limit,
         c_thermal_limit(b, F.p[b.t_idx, t], F.q[b.t_idx, t]) for (b, t) in data.barray;
-        lcon = fill(-Inf, size(data.barray)))
+        lcon = data.rep.ninf_b)
     return core, (; c_from_thermal_limit, c_to_thermal_limit)
 end
 add_thermal_mp!(core, ::DC, data, F) = (core, (;))
+
+# A compiled multi-period library needs a ONE-argument, package-owned function
+# to call: the generated app resolves it by name from another process, so a
+# closure over the curve cannot be reached. The curve and horizon are
+# compile-time facts anyway, so they live here as constants.
+const MPOPF_DEFAULT_CURVE = [1.0, 0.9, 0.8, 0.95, 1.0]
+
+"""
+    mpopf_args_default(filename) -> (data,)
+
+[`mpopf_args`](@ref) at [`MPOPF_DEFAULT_CURVE`](@ref) — the spelling a compiled
+library can call. Define your own one-argument wrapper in your package for a
+different curve.
+"""
+mpopf_args_default(filename) =
+    mpopf_args(filename, MPOPF_DEFAULT_CURVE, length(MPOPF_DEFAULT_CURVE), Float64, nothing, 0.1)
+
+"""
+    mpopf_args(filename, curve; N, T, backend, corrective_action_ratio) -> (data,)
+
+The arguments that close [`mpopf_recipe`](@ref): the parsed case with the load
+curve already applied, plus everything the recipe cannot compute from a
+placeholder.
+
+`N` and the curve are NOT arguments to a compiled library — they are baked into
+the recipe. The body slices `genarray[:, 2:N]` and expands bounds with
+`repeat(v, 1, N)`, neither of which has a symbolic form, so a compiled
+multi-period library is per-`(N, curve)` and the case file is the one value
+that crosses the boundary.
+
+The N-expanded bounds are grouped under `rep` rather than spread across the top
+level: there are fifteen of them, and `map` over a NamedTuple stops inferring
+elementwise past 31 fields, which would leave the whole argument tuple with
+concrete names and no value types.
+"""
+mpopf_args(filename, curve; N = length(curve), T = Float64, backend = nothing,
+           corrective_action_ratio = 0.1) =
+    mpopf_args(filename, curve, N, T, backend, corrective_action_ratio)
+
+# The positional method is the one a compiled library reaches: `::Type{T}` makes
+# `T` a static parameter, where the keyword form leaves it a `Type`-typed value
+# nothing downstream can specialize on.
+function mpopf_args(filename, curve, N, ::Type{T}, backend, corrective_action_ratio) where {T}
+    d = parse_mp_power_data(filename, N, corrective_action_ratio, T)
+    update_load_data(d.busarray, curve)
+    return (convert_data(_mp_narrow(d, N, T), backend),)
+end
+
+function _mp_narrow(d, N, ::Type{T}) where {T}
+    rep = (;
+        pmin = repeat(d.pmin, 1, N), pmax = repeat(d.pmax, 1, N),
+        qmin = repeat(d.qmin, 1, N), qmax = repeat(d.qmax, 1, N),
+        rate_a = repeat(d.rate_a, 1, N), nrate_a = repeat(-d.rate_a, 1, N),
+        branch_rate_a = repeat(d.branch_rate_a, 1, N),
+        nbranch_rate_a = repeat(-d.branch_rate_a, 1, N),
+        vmin = repeat(d.vmin, 1, N), vmax = repeat(d.vmax, 1, N),
+        vmin2 = repeat(d.vmin, 1, N) .^ 2, vmax2 = repeat(d.vmax, 1, N) .^ 2,
+        angmin = repeat(d.angmin, 1, N), angmax = repeat(d.angmax, 1, N),
+        srating = repeat(d.srating, 1, N), nsrating = repeat(-d.srating, 1, N),
+        emax = repeat(d.emax, 1, N),
+        pdmax = repeat(d.pdmax, 1, N), pcmax = repeat(d.pcmax, 1, N),
+        dp = repeat(d.Δp, 1, N - 1), ndp = repeat(-d.Δp, 1, N - 1),
+        ninf_b = fill(T(-Inf), size(d.barray)),
+        zero_stor = zeros(T, size(d.storarray)),
+        inf_stor = fill(T(Inf), size(d.storarray)),
+        ninf_stor = fill(T(-Inf), size(d.storarray)),
+        npcmax = repeat(-d.pcmax, 1, N),
+    )
+    return (;
+        bus = d.bus, gen = d.gen, arc = d.arc, branch = d.branch, storage = d.storage,
+        refarray = d.refarray, barray = d.barray, busarray = d.busarray,
+        arcarray = d.arcarray, genarray = d.genarray, storarray = d.storarray,
+        ramparray = d.genarray[:, 2:N],
+        storarray_tail = d.storarray[:, 2:N],
+        storarray_head = d.storarray[:, 1],
+        rep = rep,
+    )
+end
 
 function build_base_mpopf(core, form, data, N)
     core, G = add_gen_vars_mp!(core, form, data, N)
@@ -133,31 +217,31 @@ function build_base_mpopf(core, form, data, N)
     core, thermal = add_thermal_mp!(core, form, data, F)
 
     @add_con(core, c_ramp_rate,
-        c_ramp(G.pg[g.i, t-1], G.pg[g.i, t]) for (g, t) in data.genarray[:, 2:N];
-        lcon = repeat(-data.Δp, 1, N-1),
-        ucon = repeat(data.Δp, 1, N-1))
+        c_ramp(G.pg[g.i, t-1], G.pg[g.i, t]) for (g, t) in data.ramparray;
+        lcon = data.rep.ndp,
+        ucon = data.rep.dp)
 
     return core, merge(G, F), merge(thermal, (; c_ramp_rate))
 end
 
 # ── the per-formulation halves ──────────────────────────────────────────────
 
-function add_voltage_mp!(core, ::Polar, data, Nbus, N)
+function add_voltage_mp!(core, ::Polar, data, Nbus, N, ::Type{T}) where {T}
     @add_var(core, va, Nbus, N; lvar = -pi, uvar = pi)
     @add_var(core, vm, Nbus, N;
-        start = ones(size(data.busarray)),
-        lvar = repeat(data.vmin, 1, N),
-        uvar = repeat(data.vmax, 1, N))
+        start = one(T),
+        lvar = data.rep.vmin,
+        uvar = data.rep.vmax)
     return core, (; va, vm)
 end
 
-function add_voltage_mp!(core, ::Rect, data, Nbus, N)
-    @add_var(core, vr, Nbus, N; start = ones(size(data.busarray)))
+function add_voltage_mp!(core, ::Rect, data, Nbus, N, ::Type{T}) where {T}
+    @add_var(core, vr, Nbus, N; start = one(T))
     @add_var(core, vim, Nbus, N;)
     return core, (; vr, vim)
 end
 
-function add_voltage_mp!(core, ::DC, data, Nbus, N)
+function add_voltage_mp!(core, ::DC, data, Nbus, N, ::Type{T}) where {T}
     @add_var(core, va, Nbus, N; lvar = -pi, uvar = pi)
     return core, (; va)
 end
@@ -240,19 +324,19 @@ end
 function add_extras_mp!(core, ::Rect, data, N, V)
     @add_con(core, c_voltage_magnitude,
         c_voltage_magnitude_rect(V.vr[b.i, t], V.vim[b.i, t]) for (b, t) in data.busarray;
-        lcon = repeat(data.vmin, 1, N).^2,
-        ucon = repeat(data.vmax, 1, N).^2)
+        lcon = data.rep.vmin2,
+        ucon = data.rep.vmax2)
     return core, (; c_voltage_magnitude)
 end
 add_extras_mp!(core, ::Union{Polar,DC}, data, N, V) = (core, (;))
 
-function add_mpopf_cons(core, form, data, N, Nbus, vars, cons)
-    core, V = add_voltage_mp!(core, form, data, Nbus, N)
+function add_mpopf_cons(core, form, data, N, Nbus, vars, cons, ::Type{T} = Float64) where {T}
+    core, V = add_voltage_mp!(core, form, data, Nbus, N, T)
     @add_con(core, c_ref_angle, c_ref_mp(form, V, i, t) for (i, t) in data.refarray)
     core, flowcons = add_flow_cons_mp!(core, form, data, V, vars)
     @add_con(core, c_phase_angle_diff, c_angle_mp(form, b, V, t) for (b, t) in data.barray;
-        lcon = repeat(data.angmin, 1, N),
-        ucon = repeat(data.angmax, 1, N))
+        lcon = data.rep.angmin,
+        ucon = data.rep.angmax)
     core, balcons = add_balance_cons_mp!(core, form, data, V)
     core, extras = add_extras_mp!(core, form, data, N, V)
     core = add_balance_appends_mp!(core, form, data, Nbus, balcons, vars, vars)
@@ -260,12 +344,61 @@ function add_mpopf_cons(core, form, data, N, Nbus, vars, cons)
            merge(cons, (; c_ref_angle), flowcons, (; c_phase_angle_diff), balcons, extras)
 end
 
+# The body, taking the core and handing it back, so the recipe and the eager
+# core are the same model built two ways. `has_storage` is a BUILD-time fact,
+# not data: storage adds seven variable blocks, so a recipe compiled for a
+# storage case cannot instantiate one without it.
+function build_mpopf_body(core, form, data, N, Nbus, user_callback, ::Type{T} = Float64;
+                          storage_complementarity_constraint = false, has_storage = true) where {T}
+    core, vars, cons = build_base_mpopf(core, form, data, N)
+    core, vars, cons = add_mpopf_cons(core, form, data, N, Nbus, vars, cons, T)
+    if has_storage
+        core, vars, cons = build_mpopf_stor_main(core, data, N, Nbus, vars, cons, form)
+        core, vars, cons =
+            add_piecewise_cons(core, data, N, vars, cons, storage_complementarity_constraint, form)
+    end
+    core, vars2, cons2 = user_callback(core, vars, cons)
+    return core, (; vars..., vars2...), (; cons..., cons2...)
+end
+
+"""
+    mpopf_recipe(; N, form, Nbus, has_storage, backend, T, user_callback)
+
+The multi-period recipe. `N`, the bus count and whether the case has storage
+are BUILD-time facts — the body slices `genarray[:, 2:N]` and storage changes
+how many variable blocks there are — so a compiled library is per-(N, curve,
+storage-shape). Close it with [`mpopf_args`](@ref).
+"""
+function mpopf_recipe(; N, Nbus, has_storage = false, form = :polar, backend = nothing,
+                      T = Float64, user_callback = dummy_extension,
+                      storage_complementarity_constraint = false)
+    core, data = ExaCore(T; backend = backend, nargs = Val(1))
+    return build_mpopf_body(core, opf_form(form), data, N, Nbus, user_callback, T;
+        storage_complementarity_constraint, has_storage)
+end
+
+"""
+    mpopf_core(filename, curve; N, form, ...)
+
+The same multi-period model built eagerly — the form `ExaModelsC` compiles as a
+fixed model.
+"""
+function mpopf_core(filename, curve; N = length(curve), form = :polar, backend = nothing,
+                    T = Float64, user_callback = dummy_extension,
+                    corrective_action_ratio = 0.1,
+                    storage_complementarity_constraint = false)
+    data, = mpopf_args(filename, curve; N, T, backend, corrective_action_ratio)
+    core = ExaCore(T; backend = backend)
+    return build_mpopf_body(core, opf_form(form), data, N, length(data.bus), user_callback, T;
+        storage_complementarity_constraint, has_storage = length(data.storarray) > 0)
+end
+
 function build_mpopf(data, Nbus, N, form, user_callback; backend = nothing, T = Float64, storage_complementarity_constraint = false, kwargs...)
     core = ExaCore(T; backend = backend)
 
     form = opf_form(form)
     core, vars, cons = build_base_mpopf(core, form, data, N)
-    core, vars, cons = add_mpopf_cons(core, form, data, N, Nbus, vars, cons)
+    core, vars, cons = add_mpopf_cons(core, form, data, N, Nbus, vars, cons, T)
 
     if length(data.storarray) > 0
         core, vars, cons = build_mpopf_stor_main(core, data, N, Nbus, vars, cons, form)
@@ -286,7 +419,7 @@ function build_mpopf(data, Nbus, N, discharge_func::Function, form, user_callbac
 
     form = opf_form(form)
     core, vars, cons = build_base_mpopf(core, form, data, N)
-    core, vars, cons = add_mpopf_cons(core, form, data, N, Nbus, vars, cons)
+    core, vars, cons = add_mpopf_cons(core, form, data, N, Nbus, vars, cons, T)
 
     if length(data.storarray) > 0
         core, vars, cons = build_mpopf_stor_main(core, data, N, Nbus, vars, cons, form)
@@ -308,11 +441,11 @@ end
 # out. The `pst^2 + qst^2 <= rating^2` transfer limit collapses to a bound on
 # `pst`, so it is a variable bound here rather than a constraint row.
 function build_mpopf_stor_main(core, data, N, Nbus, vars, cons, form::DC)
-    @add_var(core, pst, size(data.storage, 1), N;
-        lvar = -repeat(data.srating, 1, N), uvar = repeat(data.srating, 1, N))
-    @add_var(core, E, size(data.storage, 1), N;
-        lvar = zeros(size(data.storarray)), uvar = repeat(data.emax, 1, N))
-    @add_var(core, pstd, size(data.storage, 1), N; uvar = repeat(data.pdmax, 1, N))
+    @add_var(core, pst, length(data.storage), N;
+        lvar = data.rep.nsrating, uvar = data.rep.srating)
+    @add_var(core, E, length(data.storage), N;
+        lvar = data.rep.zero_stor, uvar = data.rep.emax)
+    @add_var(core, pstd, length(data.storage), N; uvar = data.rep.pdmax)
     vars = (; vars..., pst = pst, E = E, pstd = pstd)
 
     c_active_power_balance = cons.c_active_power_balance
@@ -327,20 +460,20 @@ function build_mpopf_stor_main(core, data, N, Nbus, vars, cons, form)
     #Storage specific variables
 
     #active/reactive power from bus into storage
-    @add_var(core, pst, size(data.storage, 1), N)
-    @add_var(core, qst, size(data.storage, 1), N)
+    @add_var(core, pst, length(data.storage), N)
+    @add_var(core, qst, length(data.storage), N)
 
     #current magnitude squared
-    @add_var(core, I2, size(data.storage, 1), N; lvar = zeros(size(data.storarray)))
+    @add_var(core, I2, length(data.storage), N; lvar = data.rep.zero_stor)
 
     #ability of converter to control generation/absorption of reactive power
-    @add_var(core, qint, size(data.storage, 1), N; lvar = -repeat(data.srating, 1, N), uvar = repeat(data.srating, 1, N))
+    @add_var(core, qint, length(data.storage), N; lvar = data.rep.nsrating, uvar = data.rep.srating)
 
     #energy/ state of charge
-    @add_var(core, E, size(data.storage, 1), N; lvar = zeros(size(data.storarray)), uvar = repeat(data.emax, 1, N))
+    @add_var(core, E, length(data.storage), N; lvar = data.rep.zero_stor, uvar = data.rep.emax)
 
     #discharge from battery to grid
-    @add_var(core, pstd, size(data.storage, 1), N; uvar = repeat(data.pdmax, 1, N))
+    @add_var(core, pstd, length(data.storage), N; uvar = data.rep.pdmax)
     vars = (;vars..., pst=pst, qst=qst, I2=I2, qint=qint, E=E, pstd=pstd)
 
     c_active_power_balance = cons.c_active_power_balance
@@ -351,7 +484,7 @@ function build_mpopf_stor_main(core, data, N, Nbus, vars, cons, form)
 
     @add_con(core, c_reactive_storage_power, c_reactive_stor_power(s, qst[s.i, t], qint[s.i, t], I2[s.i, t]) for (s, t) in data.storarray)
 
-    @add_con(core, c_storage_transfer_thermal_limit, c_transfer_lim(s, pst[s.i, t], qst[s.i, t]) for (s, t) in data.storarray; lcon = fill(-Inf, size(data.storarray)))
+    @add_con(core, c_storage_transfer_thermal_limit, c_transfer_lim(s, pst[s.i, t], qst[s.i, t]) for (s, t) in data.storarray; lcon = data.rep.ninf_stor)
 
     if form isa Polar
         vm = vars.vm
@@ -396,7 +529,7 @@ end
 
 function add_piecewise_cons(core, data, N, vars, cons, storage_complementarity_constraint, form)
     #charge from battery to grid
-    @add_var(core, pstc, size(data.storage, 1), N; lvar = zeros(size(data.storarray)), uvar = repeat(data.pcmax, 1, N))
+    @add_var(core, pstc, length(data.storage), N; lvar = data.rep.zero_stor, uvar = data.rep.pcmax)
     vars = (;vars..., pstc=pstc)
 
     pst = vars.pst
@@ -405,13 +538,13 @@ function add_piecewise_cons(core, data, N, vars, cons, storage_complementarity_c
 
     core, c_active_storage_power = add_stor_power_con!(core, form, data, vars, pstc)
 
-    @add_con(core, c_storage_state, c_stor_state(s, E[s.i, t], E[s.i, t - 1], pstc[s.i, t], pstd[s.i, t]) for (s, t) in data.storarray[:, 2:N])
+    @add_con(core, c_storage_state, c_stor_state(s, E[s.i, t], E[s.i, t - 1], pstc[s.i, t], pstd[s.i, t]) for (s, t) in data.storarray_tail)
 
-    @add_con(core, c_storage_state_init, c_stor_state(s, E[s.i, t], s.energy, pstc[s.i, t], pstd[s.i, t]) for (s, t) in data.storarray[:, 1])
+    @add_con(core, c_storage_state_init, c_stor_state(s, E[s.i, t], s.energy, pstc[s.i, t], pstd[s.i, t]) for (s, t) in data.storarray_head)
 
-    @add_con(core, c_discharge_thermal_limit, c_discharge_lim(pstd[s.i, t], pstc[s.i, t]) for (s, t) in data.storarray; lcon = -repeat(data.srating, 1, N), ucon = repeat(data.srating, 1, N))
+    @add_con(core, c_discharge_thermal_limit, c_discharge_lim(pstd[s.i, t], pstc[s.i, t]) for (s, t) in data.storarray; lcon = data.rep.nsrating, ucon = data.rep.srating)
 
-    @add_con(core, c_discharge_positivity, pstd[s.i, t] for (s, t) in data.storarray; ucon = fill(Inf, size(data.storarray)))
+    @add_con(core, c_discharge_positivity, pstd[s.i, t] for (s, t) in data.storarray; ucon = data.rep.inf_stor)
 
     #Complimentarity constraint
     if storage_complementarity_constraint
@@ -436,13 +569,13 @@ function add_smooth_cons(core, data, N, vars, cons, discharge_func, form)
 
     core, c_active_storage_power = add_stor_power_smooth_con!(core, form, data, vars)
 
-    @add_con(core, c_storage_state, c_storage_state_smooth(s, E[s.i, t], E[s.i, t - 1], discharge_func, pstd[s.i, t]) for (s, t) in data.storarray[:, 2:N])
+    @add_con(core, c_storage_state, c_storage_state_smooth(s, E[s.i, t], E[s.i, t - 1], discharge_func, pstd[s.i, t]) for (s, t) in data.storarray_tail)
 
-    @add_con(core, c_storage_state_init, c_storage_state_smooth(s, E[s.i, t], s.energy, discharge_func, pstd[s.i, t]) for (s, t) in data.storarray[:, 1])
+    @add_con(core, c_storage_state_init, c_storage_state_smooth(s, E[s.i, t], s.energy, discharge_func, pstd[s.i, t]) for (s, t) in data.storarray_head)
 
-    @add_con(core, c_discharge_thermal_limit, c_discharge_limit_smooth(pstd[s.i, t]) for (s, t) in data.storarray; lcon = -repeat(data.srating, 1, N), ucon = repeat(data.srating, 1, N))
+    @add_con(core, c_discharge_thermal_limit, c_discharge_limit_smooth(pstd[s.i, t]) for (s, t) in data.storarray; lcon = data.rep.nsrating, ucon = data.rep.srating)
 
-    @add_con(core, c_charge_limit, pstd[s.i, t] for (s, t) in data.storarray; lcon = -repeat(data.pcmax, 1, N), ucon = fill(Inf, size(data.storarray)))
+    @add_con(core, c_charge_limit, pstd[s.i, t] for (s, t) in data.storarray; lcon = data.rep.npcmax, ucon = data.rep.inf_stor)
 
     cons = (;cons...,
                 c_active_storage_power = c_active_storage_power,
@@ -507,10 +640,8 @@ function mpopf_model(
 )
 
     @assert length(curve) > 0
-    data = parse_mp_power_data(filename, N, corrective_action_ratio, T)
-    update_load_data(data.busarray, curve)
-    data = convert_data(data,backend)
-    Nbus = size(data.bus, 1)
+    data, = mpopf_args(filename, curve; N, T, backend, corrective_action_ratio)
+    Nbus = length(data.bus)
 
     form = opf_form(form)
     return build_mpopf(data, Nbus, N, form, user_callback, backend = backend, T = T, storage_complementarity_constraint = storage_complementarity_constraint, kwargs...)
@@ -531,10 +662,10 @@ function mpopf_model(
     kwargs...,
 )
 
-    data = parse_mp_power_data(filename, N, corrective_action_ratio, T)
-    update_load_data(data.busarray, pd, qd, data.baseMVA[])
-    data = convert_data(data,backend)
-    Nbus = size(data.bus, 1)
+    d = parse_mp_power_data(filename, N, corrective_action_ratio, T)
+    update_load_data(d.busarray, pd, qd, d.baseMVA[])
+    data = convert_data(_mp_narrow(d, N, T), backend)
+    Nbus = length(data.bus)
     @assert Nbus == size(pd, 1)
 
     form = opf_form(form)
@@ -555,10 +686,8 @@ function mpopf_model(
 )
 
     @assert length(curve) > 0
-    data = parse_mp_power_data(filename, N, corrective_action_ratio, T)
-    update_load_data(data.busarray, curve)
-    data = convert_data(data,backend)
-    Nbus = size(data.bus, 1)
+    data, = mpopf_args(filename, curve; N, T, backend, corrective_action_ratio)
+    Nbus = length(data.bus)
 
     form = opf_form(form)
     return build_mpopf(data, Nbus, N, discharge_func, form,user_callback, backend = backend, T = T, kwargs...)
@@ -580,10 +709,10 @@ function mpopf_model(
 )
 
 
-    data = parse_mp_power_data(filename, N, corrective_action_ratio, T)
-    update_load_data(data.busarray, pd, qd, data.baseMVA[])
-    data = convert_data(data,backend)
-    Nbus = size(data.bus, 1)
+    d = parse_mp_power_data(filename, N, corrective_action_ratio, T)
+    update_load_data(d.busarray, pd, qd, d.baseMVA[])
+    data = convert_data(_mp_narrow(d, N, T), backend)
+    Nbus = length(data.bus)
     @assert Nbus == size(pd, 1)
 
     form = opf_form(form)
