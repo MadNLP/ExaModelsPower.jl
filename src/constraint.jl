@@ -113,6 +113,16 @@ function c_active_storage_power_smooth(s, pst, pstd, I2)
     return pst + pstd - s.Pexts - s.Zr*I2
 end
 
+# DC storage: no current magnitude, so no resistive loss term. Everything else
+# about the energy model is active power and carries over unchanged.
+function c_active_stor_power_dc(s, pst, pstd, pstc)
+    return pst + pstd - pstc - s.Pexts
+end
+
+function c_active_storage_power_smooth_dc(s, pst, pstd)
+    return pst + pstd - s.Pexts
+end
+
 function c_reactive_stor_power(s, qst, qint, I2)
     return qst - qint - s.Qexts - s.Zim*I2
 end
