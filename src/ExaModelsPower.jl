@@ -30,6 +30,7 @@ end
 # the arguments that close it — plus the eagerly-built core that `ExaModelsC`
 # compiles. Neither ends in "model", so they are named here.
 export ac_opf_recipe, ac_opf_args, ac_opf_core
+export dcopf_recipe, dcopf_core
     
 # A `const Ref`, not a plain global. `global TMPDIR = ...` leaves the binding
 # typed `Any`, and `mkpath(TMPDIR::Any)` is then an unresolved call that

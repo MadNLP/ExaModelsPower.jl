@@ -69,7 +69,7 @@ end
 # default for a variable with no `start`).
 _default_start(::Type{T}) where {T} =
     (va = zero(T), vm = one(T), vr = one(T), vim = zero(T),
-     pg = zero(T), qg = zero(T), p = zero(T), q = zero(T))
+     pg = zero(T), qg = zero(T), p = zero(T), q = zero(T), pf = zero(T))
 
 # A start entry may also be given as a function of the parsed data, which is how
 # a caller warm-starts from the case's own operating point — `start = (; vm = d
@@ -152,195 +152,168 @@ function ac_opf_args(filename, ::Type{T}, backend = nothing, start = (;)) where 
         qg_start = opf_start(_resolve_start(s.qg, p), ngen, T),
         p_start = opf_start(_resolve_start(s.p, p), narc, T),
         q_start = opf_start(_resolve_start(s.q, p), narc, T),
+        pf_start = opf_start(_resolve_start(s.pf, p), nbranch, T),
     )
 
     return (convert_data(data, backend),)
 end
 
-# ── The model bodies ─────────────────────────────────────────────────────────
+# ── One body, three formulations ─────────────────────────────────────────────
 #
-# Each takes the core and the data and returns the core back.  Handing the core
-# back is not optional: `@add_var` and `@add_con` *rebind* their first argument,
-# so a caller that keeps its own binding is left with a core carrying the blocks
-# but stale counters — which fails much later, at instantiation, with
-# `Nonsensical dimensions` and nothing pointing at the cause.
+# Polar, rectangular and DC all follow the same spine:
 #
-# `data` here is either an `ArgSource` placeholder (the recipe) or a concrete
-# `NamedTuple` (the fixed core).  The body is identical for both, which is what
-# keeps the compiled and in-Julia forms from drifting.
+#   variables → objective → ref angle → flows → angle diff → balance → extras
+#
+# so there is one body and a method per formulation for the steps that differ.
+# The order above is the order each formulation already used, which is what
+# lets the merge be exact: every model built here is identical to the one its
+# own builder produced, COO order included.
+#
+# The body takes the core and hands it back — `@add_var` and `@add_con` rebind
+# their first argument, so a caller keeping its own binding is left with the
+# blocks and stale counters, which fails much later at instantiation with
+# `Nonsensical dimensions`. `data` is either an `ArgSource` placeholder (a
+# recipe) or a concrete NamedTuple (an eager core); the body cannot tell.
 
-function build_polar_opf(core, data, user_callback, ::Type{T}) where {T}
-    @add_var(core, va, length(data.bus); start = data.va_start)
-    @add_var(core, vm,
-        length(data.bus);
-        start = data.vm_start,
-        lvar = data.vmin,
-        uvar = data.vmax,
-    )
+abstract type OPFForm end
+struct Polar <: OPFForm end
+struct Rect <: OPFForm end
+struct DC <: OPFForm end
 
-    @add_var(core, pg, length(data.gen); start = data.pg_start, lvar = data.pmin, uvar = data.pmax)
-    @add_var(core, qg, length(data.gen); start = data.qg_start, lvar = data.qmin, uvar = data.qmax)
-
-    @add_var(core, p, length(data.arc); start = data.p_start, lvar = -data.rate_a, uvar = data.rate_a)
-    @add_var(core, q, length(data.arc); start = data.q_start, lvar = -data.rate_a, uvar = data.rate_a)
-
-    @add_obj(core, o, gen_cost(g, pg[g.i]) for g in data.gen)
-
-    @add_con(core, c_ref_angle, c_ref_angle_polar(va[i]) for i in data.ref_buses)
-
-    @add_con(core, c_to_active_power_flow, c_to_active_power_flow_polar(b, p[b.f_idx],
-        vm[b.f_bus],vm[b.t_bus],va[b.f_bus],va[b.t_bus]) for b in data.branch)
-
-    @add_con(core, c_to_reactive_power_flow, c_to_reactive_power_flow_polar(b, q[b.f_idx],
-        vm[b.f_bus],vm[b.t_bus],va[b.f_bus],va[b.t_bus]) for b in data.branch)
-
-    @add_con(core, c_from_active_power_flow, c_from_active_power_flow_polar(b, p[b.t_idx],
-        vm[b.f_bus],vm[b.t_bus],va[b.f_bus],va[b.t_bus]) for b in data.branch)
-
-    @add_con(core, c_from_reactive_power_flow, c_from_reactive_power_flow_polar(b, q[b.t_idx],
-        vm[b.f_bus],vm[b.t_bus],va[b.f_bus],va[b.t_bus]) for b in data.branch)
-
-    @add_con(core, c_phase_angle_diff,
-        c_phase_angle_diff_polar(b,va[b.f_bus],va[b.t_bus]) for b in data.branch;
-        lcon = data.angmin,
-        ucon = data.angmax,
-    )
-
-    @add_con(core, c_active_power_balance, c_active_power_balance_demand_polar(b, vm[b.i]) for b in data.bus)
-
-    @add_con(core, c_reactive_power_balance, c_reactive_power_balance_demand_polar(b, vm[b.i]) for b in data.bus)
-
-    @add_con!(core, c_active_power_balance, a.bus => p[a.i] for a in data.arc)
-    @add_con!(core, c_reactive_power_balance, a.bus => q[a.i] for a in data.arc)
-
-    @add_con!(core, c_active_power_balance, g.bus => -pg[g.i] for g in data.gen)
-    @add_con!(core, c_reactive_power_balance, g.bus => -qg[g.i] for g in data.gen)
-
-    @add_con(core, c_from_thermal_limit, c_thermal_limit(b,p[b.f_idx],q[b.f_idx]) for b in data.branch;
-        lcon = data.branch_ninf,
-        )
-
-    @add_con(core, c_to_thermal_limit, c_thermal_limit(b,p[b.t_idx],q[b.t_idx])
-        for b in data.branch;
-        lcon = data.branch_ninf,
-    )
-
-    vars = (
-            va = va,
-            vm = vm,
-            pg = pg,
-            qg = qg,
-            p = p,
-            q = q
-        )
-
-    cons = (
-        c_ref_angle = c_ref_angle,
-        c_to_active_power_flow = c_to_active_power_flow,
-        c_to_reactive_power_flow = c_to_reactive_power_flow,
-        c_from_active_power_flow = c_from_active_power_flow,
-        c_from_reactive_power_flow = c_from_reactive_power_flow,
-        c_phase_angle_diff = c_phase_angle_diff,
-        c_active_power_balance = c_active_power_balance,
-        c_reactive_power_balance = c_reactive_power_balance,
-        c_from_thermal_limit = c_from_thermal_limit,
-        c_to_thermal_limit = c_to_thermal_limit
-    )
-
-    core, vars2, cons2 = user_callback(core, vars, cons)
-
-    return core, (;vars..., vars2...), (;cons..., cons2...)
-end
-
-function build_rect_opf(core, data, user_callback, ::Type{T}) where {T}
-    @add_var(core, vr, length(data.bus); start = data.vr_start)
-    @add_var(core, vim, length(data.bus); start = data.vim_start)
-
-    @add_var(core, pg, length(data.gen); start = data.pg_start, lvar = data.pmin, uvar = data.pmax)
-    @add_var(core, qg, length(data.gen); start = data.qg_start, lvar = data.qmin, uvar = data.qmax)
-
-    @add_var(core, p, length(data.arc); start = data.p_start, lvar = -data.rate_a, uvar = data.rate_a)
-    @add_var(core, q, length(data.arc); start = data.q_start, lvar = -data.rate_a, uvar = data.rate_a)
-
-    @add_obj(core, o, gen_cost(g, pg[g.i]) for g in data.gen)
-
-    @add_con(core, c_ref_angle, c_ref_angle_rect(vr[i], vim[i]) for i in data.ref_buses)
-
-    @add_con(core, c_to_active_power_flow, c_to_active_power_flow_rect(b,p[b.f_idx],
-        vr[b.f_bus],vr[b.t_bus],vim[b.f_bus],vim[b.t_bus]) for b in data.branch)
-
-    @add_con(core, c_to_reactive_power_flow, c_to_reactive_power_flow_rect(b,q[b.f_idx],
-        vr[b.f_bus],vr[b.t_bus],vim[b.f_bus],vim[b.t_bus]) for b in data.branch)
-
-    @add_con(core, c_from_active_power_flow, c_from_active_power_flow_rect(b,p[b.t_idx],
-        vr[b.f_bus],vr[b.t_bus],vim[b.f_bus],vim[b.t_bus]) for b in data.branch)
-
-    @add_con(core, c_from_reactive_power_flow, c_from_reactive_power_flow_rect(b,q[b.t_idx],
-        vr[b.f_bus],vr[b.t_bus],vim[b.f_bus],vim[b.t_bus]) for b in data.branch)
-
-    @add_con(core, c_phase_angle_diff, c_phase_angle_diff_rect(b,
-        vr[b.f_bus],vr[b.t_bus],vim[b.f_bus],vim[b.t_bus])
-        for b in data.branch;
-        lcon = data.angmin,
-        ucon = data.angmax,
-    )
-
-    @add_con(core, c_active_power_balance, c_active_power_balance_demand_rect(b, vr[b.i], vim[b.i]) for b in data.bus)
-
-    @add_con(core, c_reactive_power_balance, c_reactive_power_balance_demand_rect(b, vr[b.i], vim[b.i]) for b in data.bus)
-
-    @add_con!(core, c_active_power_balance, a.bus => p[a.i] for a in data.arc)
-    @add_con!(core, c_reactive_power_balance, a.bus => q[a.i] for a in data.arc)
-
-    @add_con!(core, c_active_power_balance, g.bus => -pg[g.i] for g in data.gen)
-    @add_con!(core, c_reactive_power_balance, g.bus => -qg[g.i] for g in data.gen)
-
-    @add_con(core, c_from_thermal_limit, c_thermal_limit(b,p[b.f_idx], q[b.f_idx]) for b in data.branch;
-        lcon = data.branch_ninf,
-    )
-
-    @add_con(core, c_to_thermal_limit, c_thermal_limit(b,p[b.t_idx], q[b.t_idx])
-        for b in data.branch;
-        lcon = data.branch_ninf,
-    )
-
-    @add_con(core, c_voltage_magnitude, c_voltage_magnitude_rect(vr[b.i], vim[b.i]) for b in data.bus;
-        lcon = data.vmin2,
-        ucon = data.vmax2
-    )
-
-    vars = (
-        vr = vr,
-        vim = vim,
-        pg = pg,
-        qg = qg,
-        p = p,
-        q = q
-    )
-
-    cons = (
-        c_ref_angle = c_ref_angle,
-        c_to_active_power_flow = c_to_active_power_flow,
-        c_to_reactive_power_flow = c_to_reactive_power_flow,
-        c_from_active_power_flow = c_from_active_power_flow,
-        c_from_reactive_power_flow = c_from_reactive_power_flow,
-        c_phase_angle_diff = c_phase_angle_diff,
-        c_active_power_balance = c_active_power_balance,
-        c_reactive_power_balance = c_reactive_power_balance,
-        c_from_thermal_limit = c_from_thermal_limit,
-        c_to_thermal_limit = c_to_thermal_limit,
-        c_voltage_magnitude = c_voltage_magnitude
-    )
-
-    core, vars2, cons2 = user_callback(core, vars, cons)
-
-    return core, (;vars..., vars2...), (;cons..., cons2...)
-end
-
-_opf_body(form) =
-    form == :polar ? build_polar_opf :
-    form == :rect ? build_rect_opf :
+opf_form(f::OPFForm) = f
+opf_form(s::Symbol) =
+    s === :polar ? Polar() :
+    s === :rect ? Rect() :
+    s === :dc ? DC() :
     error("Invalid coordinate symbol - valid options are :polar or :rect")
+
+# ── variables ────────────────────────────────────────────────────────────────
+
+function add_voltage!(core, ::Polar, d)
+    @add_var(core, va, length(d.bus); start = d.va_start)
+    @add_var(core, vm, length(d.bus); start = d.vm_start, lvar = d.vmin, uvar = d.vmax)
+    return core, (; va, vm)
+end
+
+function add_voltage!(core, ::Rect, d)
+    @add_var(core, vr, length(d.bus); start = d.vr_start)
+    @add_var(core, vim, length(d.bus); start = d.vim_start)
+    return core, (; vr, vim)
+end
+
+function add_generation!(core, ::Union{Polar,Rect}, d)
+    @add_var(core, pg, length(d.gen); start = d.pg_start, lvar = d.pmin, uvar = d.pmax)
+    @add_var(core, qg, length(d.gen); start = d.qg_start, lvar = d.qmin, uvar = d.qmax)
+    return core, (; pg, qg)
+end
+
+function add_flows!(core, ::Union{Polar,Rect}, d)
+    @add_var(core, p, length(d.arc); start = d.p_start, lvar = -d.rate_a, uvar = d.rate_a)
+    @add_var(core, q, length(d.arc); start = d.q_start, lvar = -d.rate_a, uvar = d.rate_a)
+    return core, (; p, q)
+end
+
+# ── the expressions that differ by formulation ──────────────────────────────
+
+@inline c_ref(::Polar, V, i) = c_ref_angle_polar(V.va[i])
+@inline c_ref(::Rect, V, i) = c_ref_angle_rect(V.vr[i], V.vim[i])
+
+@inline c_angle(::Polar, b, V) = c_phase_angle_diff_polar(b, V.va[b.f_bus], V.va[b.t_bus])
+@inline c_angle(::Rect, b, V) =
+    c_phase_angle_diff_rect(b, V.vr[b.f_bus], V.vr[b.t_bus], V.vim[b.f_bus], V.vim[b.t_bus])
+
+@inline c_bal_p(::Polar, b, V) = c_active_power_balance_demand_polar(b, V.vm[b.i])
+@inline c_bal_p(::Rect, b, V) = c_active_power_balance_demand_rect(b, V.vr[b.i], V.vim[b.i])
+@inline c_bal_q(::Polar, b, V) = c_reactive_power_balance_demand_polar(b, V.vm[b.i])
+@inline c_bal_q(::Rect, b, V) = c_reactive_power_balance_demand_rect(b, V.vr[b.i], V.vim[b.i])
+
+# The four AC branch flows, selected by a `Val` rather than by four more helper
+# names per formulation. This is the one place the merged form reads worse than
+# the duplicated one; it is eight one-line methods against eight inline
+# expressions, and it keeps `add_flow_constraints!` shared.
+@inline ac_flow(f, s::Symbol, b, F, V) = ac_flow(f, Val(s), b, F, V)
+@inline ac_flow(::Polar, ::Val{:ta}, b, F, V) =
+    c_to_active_power_flow_polar(b, F.p[b.f_idx], V.vm[b.f_bus], V.vm[b.t_bus], V.va[b.f_bus], V.va[b.t_bus])
+@inline ac_flow(::Polar, ::Val{:tr}, b, F, V) =
+    c_to_reactive_power_flow_polar(b, F.q[b.f_idx], V.vm[b.f_bus], V.vm[b.t_bus], V.va[b.f_bus], V.va[b.t_bus])
+@inline ac_flow(::Polar, ::Val{:fa}, b, F, V) =
+    c_from_active_power_flow_polar(b, F.p[b.t_idx], V.vm[b.f_bus], V.vm[b.t_bus], V.va[b.f_bus], V.va[b.t_bus])
+@inline ac_flow(::Polar, ::Val{:fr}, b, F, V) =
+    c_from_reactive_power_flow_polar(b, F.q[b.t_idx], V.vm[b.f_bus], V.vm[b.t_bus], V.va[b.f_bus], V.va[b.t_bus])
+@inline ac_flow(::Rect, ::Val{:ta}, b, F, V) =
+    c_to_active_power_flow_rect(b, F.p[b.f_idx], V.vr[b.f_bus], V.vr[b.t_bus], V.vim[b.f_bus], V.vim[b.t_bus])
+@inline ac_flow(::Rect, ::Val{:tr}, b, F, V) =
+    c_to_reactive_power_flow_rect(b, F.q[b.f_idx], V.vr[b.f_bus], V.vr[b.t_bus], V.vim[b.f_bus], V.vim[b.t_bus])
+@inline ac_flow(::Rect, ::Val{:fa}, b, F, V) =
+    c_from_active_power_flow_rect(b, F.p[b.t_idx], V.vr[b.f_bus], V.vr[b.t_bus], V.vim[b.f_bus], V.vim[b.t_bus])
+@inline ac_flow(::Rect, ::Val{:fr}, b, F, V) =
+    c_from_reactive_power_flow_rect(b, F.q[b.t_idx], V.vr[b.f_bus], V.vr[b.t_bus], V.vim[b.f_bus], V.vim[b.t_bus])
+
+# ── constraint groups ───────────────────────────────────────────────────────
+
+function add_flow_constraints!(core, form::Union{Polar,Rect}, d, V, F)
+    @add_con(core, c_to_active_power_flow, ac_flow(form, :ta, b, F, V) for b in d.branch)
+    @add_con(core, c_to_reactive_power_flow, ac_flow(form, :tr, b, F, V) for b in d.branch)
+    @add_con(core, c_from_active_power_flow, ac_flow(form, :fa, b, F, V) for b in d.branch)
+    @add_con(core, c_from_reactive_power_flow, ac_flow(form, :fr, b, F, V) for b in d.branch)
+    return core,
+    (;
+        c_to_active_power_flow,
+        c_to_reactive_power_flow,
+        c_from_active_power_flow,
+        c_from_reactive_power_flow,
+    )
+end
+
+function add_balance!(core, form::Union{Polar,Rect}, d, V, G, F)
+    @add_con(core, c_active_power_balance, c_bal_p(form, b, V) for b in d.bus)
+    @add_con(core, c_reactive_power_balance, c_bal_q(form, b, V) for b in d.bus)
+    @add_con!(core, c_active_power_balance, a.bus => F.p[a.i] for a in d.arc)
+    @add_con!(core, c_reactive_power_balance, a.bus => F.q[a.i] for a in d.arc)
+    @add_con!(core, c_active_power_balance, g.bus => -G.pg[g.i] for g in d.gen)
+    @add_con!(core, c_reactive_power_balance, g.bus => -G.qg[g.i] for g in d.gen)
+    return core, (; c_active_power_balance, c_reactive_power_balance)
+end
+
+function add_extras!(core, ::Polar, d, V, F)
+    @add_con(core, c_from_thermal_limit,
+        c_thermal_limit(b, F.p[b.f_idx], F.q[b.f_idx]) for b in d.branch; lcon = d.branch_ninf)
+    @add_con(core, c_to_thermal_limit,
+        c_thermal_limit(b, F.p[b.t_idx], F.q[b.t_idx]) for b in d.branch; lcon = d.branch_ninf)
+    return core, (; c_from_thermal_limit, c_to_thermal_limit)
+end
+
+function add_extras!(core, ::Rect, d, V, F)
+    @add_con(core, c_from_thermal_limit,
+        c_thermal_limit(b, F.p[b.f_idx], F.q[b.f_idx]) for b in d.branch; lcon = d.branch_ninf)
+    @add_con(core, c_to_thermal_limit,
+        c_thermal_limit(b, F.p[b.t_idx], F.q[b.t_idx]) for b in d.branch; lcon = d.branch_ninf)
+    @add_con(core, c_voltage_magnitude,
+        c_voltage_magnitude_rect(V.vr[b.i], V.vim[b.i]) for b in d.bus;
+        lcon = d.vmin2, ucon = d.vmax2)
+    return core, (; c_from_thermal_limit, c_to_thermal_limit, c_voltage_magnitude)
+end
+
+# ── the spine ───────────────────────────────────────────────────────────────
+
+function build_opf(core, form::OPFForm, data, user_callback, ::Type{T}) where {T}
+    core, V = add_voltage!(core, form, data)
+    core, G = add_generation!(core, form, data)
+    core, F = add_flows!(core, form, data)
+
+    @add_obj(core, o, gen_cost(g, G.pg[g.i]) for g in data.gen)
+    @add_con(core, c_ref_angle, c_ref(form, V, i) for i in data.ref_buses)
+    core, flowcons = add_flow_constraints!(core, form, data, V, F)
+    @add_con(core, c_phase_angle_diff, c_angle(form, b, V) for b in data.branch;
+        lcon = data.angmin, ucon = data.angmax)
+    core, balcons = add_balance!(core, form, data, V, G, F)
+    core, extras = add_extras!(core, form, data, V, F)
+
+    vars = merge(V, G, F)
+    cons = merge((; c_ref_angle), flowcons, (; c_phase_angle_diff), balcons, extras)
+    core, vars2, cons2 = user_callback(core, vars, cons)
+    return core, (; vars..., vars2...), (; cons..., cons2...)
+end
 
 """
     ac_opf_recipe(; backend, T, form, user_callback) -> (core, variables, constraints)
@@ -371,7 +344,7 @@ function ac_opf_recipe(;
     user_callback = dummy_extension,
 )
     core, data = ExaCore(T; backend = backend, nargs = Val(1))
-    return _opf_body(form)(core, data, user_callback, T)
+    return build_opf(core, opf_form(form), data, user_callback, T)
 end
 
 """
@@ -404,7 +377,7 @@ function ac_opf_core(
 )
     data, = ac_opf_args(filename; T = T, backend = backend, start = start)
     core = ExaCore(T; backend = backend)
-    return _opf_body(form)(core, data, user_callback, T)
+    return build_opf(core, opf_form(form), data, user_callback, T)
 end
 
 """
