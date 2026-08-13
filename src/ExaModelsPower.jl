@@ -29,6 +29,7 @@ end
 # recipe has two more halves that a caller needs by name — the recipe itself and
 # the arguments that close it — plus the eagerly-built core that `ExaModelsC`
 # compiles. Neither ends in "model", so they are named here.
+export opf_recipe, opf_args, opf_core, opf_model
 export ac_opf_recipe, ac_opf_args, ac_opf_core
 export dcopf_recipe, dcopf_core
     

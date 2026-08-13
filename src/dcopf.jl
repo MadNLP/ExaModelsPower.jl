@@ -47,70 +47,13 @@ end
 
 add_extras!(core, ::DC, d, V, F) = (core, (;))
 
-"""
-    dcopf_recipe(; backend, T, user_callback) -> (core, variables, constraints)
+# ── DC entry points ─────────────────────────────────────────────────────────
+#
+# The body, the arguments and the three entry points are shared with AC; these
+# are the DC-named spellings of them, kept because `dcopf_model(file)` reads
+# better than `opf_model(file; form = :dc)` at a call site that only ever wants
+# DC.
 
-The DC OPF *recipe* — structure with the case data left open. Close it with
-[`ac_opf_args`](@ref), which assembles what a placeholder cannot compute:
-
-```julia
-core, vars, cons = dcopf_recipe()
-model = ExaModel(core, ac_opf_args("pglib_opf_case118_ieee.m")...)
-```
-"""
-function dcopf_recipe(; backend = nothing, T = Float64, user_callback = dummy_extension)
-    core, data = ExaCore(T; backend = backend, nargs = Val(1))
-    return build_opf(core, DC(), data, user_callback, T)
-end
-
-"""
-    dcopf_core(filename; backend, T, user_callback, start)
-        -> (core, variables, constraints)
-
-The same DC model built eagerly, so the core declares no placeholders — the
-form `ExaModelsC.compile_library` compiles as a fixed model.
-"""
-function dcopf_core(filename; backend = nothing, T = Float64,
-                    user_callback = dummy_extension, start = (;))
-    data, = ac_opf_args(filename; T = T, backend = backend, start = start)
-    core = ExaCore(T; backend = backend)
-    return build_opf(core, DC(), data, user_callback, T)
-end
-
-
-"""
-    dcopf_model(filename; backend, T, user_callback)
-
-Return `ExaModel`, variables, and constraints for a static linearized DC Optimal Power Flow (DCOPF) problem from the given file.
-
-# Arguments
-- `filename::String`: Path to the data file.
-- `backend`: The solver backend to use. Default if nothing.
-- `T`: The numeric type to use (default is `Float64`).
-- `user_callback`: User function that extends the model
-- `kwargs...`: Additional keyword arguments passed to the model builder.
-
-# Returns
-A vector `(model, variables, constraints)`:
-- `model`: An `ExaModel` object.
-- `variables`: NamedTuple of model variables.
-- `constraints`: NamedTuple of model constraints.
-"""
-
-function dcopf_model(
-    filename;
-    backend = nothing,
-    T = Float64,
-    user_callback = dummy_extension,
-    kwargs...,
-)
-    core, vars, cons = dcopf_recipe(; backend = backend, T = T, user_callback = user_callback)
-    args = ac_opf_args(filename; T = T, backend = backend)
-    model = ExaModel(core, args...; prod = true, kwargs...)
-    # Resolved against the same arguments the model was built from; a recipe's
-    # handles carry `ArgNode` offsets that `solution` cannot index with.
-    return model,
-           ExaModels.instantiate(vars, args...),
-           ExaModels.instantiate(cons, args...)
-
-end
+dcopf_recipe(; kwargs...) = opf_recipe(; form = :dc, kwargs...)
+dcopf_core(filename; kwargs...) = opf_core(filename; form = :dc, kwargs...)
+dcopf_model(filename; kwargs...) = opf_model(filename; form = :dc, kwargs...)

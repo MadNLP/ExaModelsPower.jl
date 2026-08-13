@@ -6,7 +6,7 @@ end
 #
 # The AC OPF is written once, as a *recipe*: an `ExaCore` whose structure is
 # fixed but whose data is left open, standing in as an `ExaModels.ArgSource`
-# placeholder.  `ac_opf_args` produces the data that closes it, and
+# placeholder.  `opf_args` produces the data that closes it, and
 # `ac_opf_model` is the two composed — so there is one definition of the model
 # rather than two that can drift.
 #
@@ -22,13 +22,13 @@ end
 # deferred size, a broadcast, or a comprehension has no symbolic form, and
 # `ExaModels` refuses them rather than silently mis-building.  Three things in
 # this model were written that way before, and none of them is dropped: each
-# becomes a value `ac_opf_args` computes and passes in as ordinary data.
+# becomes a value `opf_args` computes and passes in as ordinary data.
 #
 #   * starting points, previously `fill!(similar(data.bus, T), one(T))`;
 #   * the rectangular form's squared voltage bounds, previously `data.vmin.^2`;
 #   * the thermal limits' `-Inf` lower bounds, previously a filled array.
 #
-# `ac_opf_args` is the adapter between what a *user* has — a case file, and
+# `opf_args` is the adapter between what a *user* has — a case file, and
 # preferences about how to start — and what the recipe (and, past it, the
 # ExaModelsC boundary) can carry, which is data and only data.
 
@@ -44,7 +44,7 @@ Materialize a user-supplied starting point into a length-`n` `Vector{T}`.
   *named* function rather than an anonymous one, so that the type survives
   ahead-of-time compilation and reads intelligibly in errors.
 
-Generators and vectors are collected here, in `ac_opf_args`, rather than being
+Generators and vectors are collected here, in `opf_args`, rather than being
 referred to from the recipe: only data crosses into an instantiated model, so
 resolving them at this point is what lets the same start work for an in-Julia
 model and for a compiled library.
@@ -79,10 +79,10 @@ _resolve_start(f, data) = f(data)
 _resolve_start(v::Union{Number,AbstractVector,Base.Generator}, data) = v
 
 """
-    ac_opf_args(filename; T = Float64, backend = nothing, start = (;))
+    opf_args(filename; T = Float64, backend = nothing, start = (;))
         -> (data,)
 
-Return the argument tuple that closes [`ac_opf_recipe`](@ref) — the parsed case
+Return the argument tuple that closes [`opf_recipe`](@ref) — the parsed case
 together with everything the recipe cannot compute from a placeholder.
 
 `start` overrides any of the starting points `va`, `vm`, `vr`, `vim`, `pg`,
@@ -93,17 +93,17 @@ elsewhere, which is what this model used before the recipe split.
 
 # Example
 ```julia
-args = ac_opf_args("pglib_opf_case118_ieee.m"; start = (vm = d -> d.vm0, va = d -> d.va0))
+args = opf_args("pglib_opf_case118_ieee.m"; start = (vm = d -> d.vm0, va = d -> d.va0))
 model = ExaModel(ac_opf_recipe()[1], args...)
 ```
 """
-ac_opf_args(filename; T = Float64, backend = nothing, start = (;)) =
-    ac_opf_args(filename, T, backend, start)
+opf_args(filename; T = Float64, backend = nothing, start = (;)) =
+    opf_args(filename, T, backend, start)
 
 # The positional method is the one a compiled library calls: `::Type{T}` makes
 # `T` a static parameter, where the keyword form leaves it a `Type`-typed value
 # that nothing downstream can specialize on.
-function ac_opf_args(filename, ::Type{T}, backend = nothing, start = (;)) where {T}
+function opf_args(filename, ::Type{T}, backend = nothing, start = (;)) where {T}
     p = parse_ac_power_data(filename, T)
     s = merge(_default_start(T), NamedTuple(start))
     bus, gen, arc, branch = p.bus, p.gen, p.arc, p.branch
@@ -321,15 +321,15 @@ end
 Return the AC OPF *recipe* — an `ExaCore` holding the model's structure with its
 data left open — together with the variable and constraint handles.
 
-Close it with [`ac_opf_args`](@ref):
+Close it with [`opf_args`](@ref):
 
 ```julia
 core, vars, cons = ac_opf_recipe()
-model = ExaModel(core, ac_opf_args("pglib_opf_case118_ieee.m")...)
+model = ExaModel(core, opf_args("pglib_opf_case118_ieee.m")...)
 ```
 
 The same recipe instantiates at any case; it is not consumed by the first use.
-See [`ac_opf_core`](@ref) for the form `ExaModelsC` compiles.
+See [`opf_core`](@ref) for the form `ExaModelsC` compiles.
 
 # Arguments
 - `backend`: the array backend to build against. Default `nothing` (CPU).
@@ -337,7 +337,7 @@ See [`ac_opf_core`](@ref) for the form `ExaModelsC` compiles.
 - `form`: voltage representation, `:polar` or `:rect`. Default `:polar`.
 - `user_callback`: user function that extends the model.
 """
-function ac_opf_recipe(;
+function opf_recipe(;
     backend = nothing,
     T = Float64,
     form = :polar,
@@ -352,7 +352,7 @@ end
         -> (core, variables, constraints)
 
 Return an AC OPF core with the case's data already in it — the same model as
-[`ac_opf_recipe`](@ref) closed by [`ac_opf_args`](@ref), but built eagerly, so
+[`opf_recipe`](@ref) closed by [`opf_args`](@ref), but built eagerly, so
 the core declares no placeholders (`nargs = Val(0)`).
 
 This is the form `ExaModelsC.compile_library` compiles: one library per case,
@@ -367,7 +367,7 @@ Passing an example argument there would select the recipe path instead and be
 refused for carrying tables rather than a single integer — a different failure
 that reads like this one.
 """
-function ac_opf_core(
+function opf_core(
     filename;
     backend = nothing,
     T = Float64,
@@ -375,7 +375,7 @@ function ac_opf_core(
     user_callback = dummy_extension,
     start = (;),
 )
-    data, = ac_opf_args(filename; T = T, backend = backend, start = start)
+    data, = opf_args(filename; T = T, backend = backend, start = start)
     core = ExaCore(T; backend = backend)
     return build_opf(core, opf_form(form), data, user_callback, T)
 end
@@ -386,7 +386,7 @@ end
 Return `ExaModel`, variables, and constraints for a static AC Optimal Power Flow
 (ACOPF) problem from the given file.
 
-Defined as [`ac_opf_recipe`](@ref) instantiated at [`ac_opf_args`](@ref), so the
+Defined as [`opf_recipe`](@ref) instantiated at [`opf_args`](@ref), so the
 model solved here and the model compiled by `ExaModelsC` are built from one
 definition rather than two.
 
@@ -396,7 +396,7 @@ definition rather than two.
 - `T`: The numeric type to use (default is `Float64`).
 - `form`: Voltage representation, either `:polar` or `:rect`. Default is `:polar`.
 - `user_callback`: User function that extends the model
-- `start`: Starting-point overrides; see [`ac_opf_args`](@ref).
+- `start`: Starting-point overrides; see [`opf_args`](@ref).
 - `kwargs...`: Additional keyword arguments passed to the model builder.
 
 # Returns
@@ -405,7 +405,7 @@ A vector `(model, variables, constraints)`:
 - `variables`: NamedTuple of model variables.
 - `constraints`: NamedTuple of model constraints.
 """
-function ac_opf_model(
+function opf_model(
     filename;
     backend = nothing,
     T = Float64,
@@ -416,6 +416,19 @@ function ac_opf_model(
 )
     core, vars, cons =
         ac_opf_recipe(; backend = backend, T = T, form = form, user_callback = user_callback)
-    args = ac_opf_args(filename; T = T, backend = backend, start = start)
+    args = opf_args(filename; T = T, backend = backend, start = start)
     return ExaModel(core, args...; prod = true, kwargs...), vars, cons
 end
+
+# ── The old names ───────────────────────────────────────────────────────────
+#
+# `ac_opf_*` and `dcopf_*` are one family now — the body is the same and the
+# formulation is an argument — so these are the shared entry points under the
+# names callers already use. `:dc` is a formulation like any other, so
+# `ac_opf_model(f; form = :dc)` is legal and means what it says; `dcopf_model`
+# is the spelling that says it in the name.
+
+ac_opf_recipe(; form = :polar, kwargs...) = opf_recipe(; form = form, kwargs...)
+ac_opf_core(filename; form = :polar, kwargs...) = opf_core(filename; form = form, kwargs...)
+ac_opf_model(filename; form = :polar, kwargs...) = opf_model(filename; form = form, kwargs...)
+ac_opf_args(filename; kwargs...) = opf_args(filename; kwargs...)
