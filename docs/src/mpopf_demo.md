@@ -10,7 +10,7 @@ Some of the models in this portion of the tutorial involve using external files.
 We will start with the simplest way to model the MPOPF, which also does not require the user to have any data already downloaded. Instead, the user specifies a demand curve for the system. The demand curve is a vector of ratios from 0 to 1 which indicate the scaling of demand compared to the demand indicated by the static OPF file. In this model of the MPOPF, every consuming bus has the same scaling in power demand for each point in time. A corrective action ratio, which limits the ramp rate of generators, can also be inputted. It is set to 0.1 as a default. The adjustable coordinate system and backend that were present for the static OPF are also available for all MPOPF models.
 
 ````julia
-using ExaModelsPower, CUDA, MadNLP, MadNLPGPU, ExaModels
+using ExaModelsPower, CUDA, MadNLP, MadNLPGPU, CUDSS, ExaModels
 model, vars, cons = mpopf_model(
     "pglib_opf_case118_ieee.m", # static network data
     [.64, .60, .58, .56, .56, .58, .64, .76, .87, .95, .99, 1.0, .99, 1.0, 1.0,
@@ -18,7 +18,7 @@ model, vars, cons = mpopf_model(
     backend = CUDABackend(),
     corrective_action_ratio = 0.3
 )
-result = madnlp(model; tol=1e-6)
+result = madnlp(model; tol=1e-6, kkt_system = MadNLP.SparseCondensedKKTSystem, linear_solver = MadNLPGPU.CUDSSSolver)
 ````
 
 ````
@@ -49,6 +49,10 @@ if !isfile(qd_file)
 end
 ````
 
+````
+"halfhour_30.Qd"
+````
+
 Next, build the MPOPF model, providing the dynamic load data instead of a demand curve as input.
 
 ````julia
@@ -61,7 +65,7 @@ model, vars, cons = mpopf_model(
 )
 
 #Solve
-result = madnlp(model; tol=1e-6)
+result = madnlp(model; tol=1e-6, kkt_system = MadNLP.SparseCondensedKKTSystem, linear_solver = MadNLPGPU.CUDSSSolver)
 
 # MPOPF with storage
 ````
@@ -86,6 +90,10 @@ if !isfile(stor_file)
 end
 ````
 
+````
+"pglib_opf_case30_ieee_mod.m"
+````
+
 Generate the model with your modified datafile. If the datafile contains storage parameters, ExaModelsPower will automatically recognize it and include the additional necessary constraints.
 
 ````julia
@@ -96,12 +104,12 @@ model, vars, cons = mpopf_model(
     backend = CUDABackend(),
     storage_complementarity_constraint = false
 )
-result = madnlp(model; tol=1e-6)
+result = madnlp(model; tol=1e-6, kkt_system = MadNLP.SparseCondensedKKTSystem, linear_solver = MadNLPGPU.CUDSSSolver)
 result.objective
 ````
 
 ````
-299068.0404892949
+299068.04045140574
 ````
 
 ExaModelsPower also provides a secondary option to avoid dealing with complementarity constraints. The user can specify a function that computesloss in battery level as a smooth function of discharge rate and the storage devices thermal rating parameter. We provide an arbitrary example function to demonstrate the modeling capability.
@@ -123,12 +131,12 @@ model, vars, cons = mpopf_model(
     backend = CUDABackend(),
     storage_complementarity_constraint = false
 )
-result = madnlp(model; tol=1e-6)
+result = madnlp(model; tol=1e-6, kkt_system = MadNLP.SparseCondensedKKTSystem, linear_solver = MadNLPGPU.CUDSSSolver)
 result.objective
 ````
 
 ````
-299044.32404539204
+299044.32197753823
 ````
 
 Despite the example discharge function being generated somewhat arbitrarily, the resultant objective values remain quite close for both the smooth and piecewise charge/discharge functions.

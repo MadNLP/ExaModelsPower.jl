@@ -16,7 +16,7 @@ using ExaModelsPower, MadNLP, MadNLPGPU, CUDA, ExaModels, GOC3Benchmark, JSON
 model, vars, cons = ac_opf_model(
     "pglib_opf_case118_ieee.m";
     backend = CUDABackend(),
-    form = :polar
+    form = Polar()
 )
 result = madnlp(model; tol=1e-6)
 

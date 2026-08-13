@@ -12,10 +12,22 @@ The latest version of ExaModelsPower can be installed in julia as so. Additional
 using ExaModelsPower, CUDA
 ````
 
-In order to solve the ExaModels developed by ExaModelsPower, an NLP solver is required. ExaModels is compatible with MadNLP and Ipopt, but this tutorial will focus on MadNLP to demonstrate GPU solving capabilities.
+````
+Precompiling packages...
+  28902.2 ms  ✓ CUDATools
+   9139.8 ms  ✓ CUDA
+   8447.9 ms  ✓ Atomix → AtomixCUDAExt
+  3 dependencies successfully precompiled in 48 seconds. 99 already precompiled.
+Precompiling packages...
+   8522.7 ms  ✓ LinearOperators → LinearOperatorsCUDAExt
+  1 dependency successfully precompiled in 10 seconds. 105 already precompiled.
+
+````
+
+In order to solve the ExaModels developed by ExaModelsPower, an NLP solver is required. ExaModels is compatible with MadNLP and Ipopt, but this tutorial will focus on MadNLP to demonstrate GPU solving capabilities. CUDSS is loaded so MadNLP's CUDA extension activates and the default GPU linear solver becomes available.
 
 ````julia
-using MadNLP, MadNLPGPU #, NLPModelsIpopt
+using MadNLP, MadNLPGPU, CUDSS #, NLPModelsIpopt
 ````
 
 Finally, we install ExaModels to allow solved models to be unpacked.
@@ -30,14 +42,14 @@ We will begin by constructing and solving a static OPF using the function opf_mo
 model, vars, cons = ac_opf_model(
     "pglib_opf_case118_ieee.m";
     backend = CUDABackend(),
-    form = :polar,
+    form = Polar(),
     T = Float64
 );
 model
 ````
 
 ````
-An ExaModel{Float64, CUDA.CuArray{Float64, 1, CUDA.DeviceMemory}, ...}
+An ExaModel{Float64, CUDACore.CuArray{Float64, 1, CUDACore.DeviceMemory}, ...}
 
   Problem name: Generic
    All variables: ████████████████████ 1088   All constraints: ████████████████████ 1539  
@@ -50,6 +62,8 @@ An ExaModel{Float64, CUDA.CuArray{Float64, 1, CUDA.DeviceMemory}, ...}
             nnzh: ( 98.57% sparsity)   8474            linear: ⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅⋅ 0     
                                                     nonlinear: ████████████████████ 1539  
                                                          nnzj: ( 99.65% sparsity)   5925  
+                                                     lin_nnzj: (------% sparsity)         
+                                                     nln_nnzj: ( 99.65% sparsity)   5925  
 
 
 ````
@@ -57,7 +71,7 @@ An ExaModel{Float64, CUDA.CuArray{Float64, 1, CUDA.DeviceMemory}, ...}
 Once the model is built, we can generate a solution using MadNLP.
 
 ````julia
-result = madnlp(model; tol=1e-6)
+result = madnlp(model; tol=1e-6, kkt_system = MadNLP.SparseCondensedKKTSystem, linear_solver = MadNLPGPU.CUDSSSolver)
 ````
 
 ````
@@ -71,17 +85,17 @@ solution(result, vars.vm)[1:10]
 ````
 
 ````
-10-element CUDA.CuArray{Float64, 1, CUDA.DeviceMemory}:
- 1.0580725147180055
- 1.0115214146056677
- 1.0371945440876782
- 1.012711563923005
- 1.0170524545913904
- 1.0544369316430553
- 1.0575146839020113
- 1.0303511034471369
- 1.041850151876181
- 1.0519359527784276
+10-element CUDACore.CuArray{Float64, 1, CUDACore.DeviceMemory}:
+ 1.0224139037362734
+ 1.0292793230191188
+ 1.0302731418618507
+ 1.0600010135870543
+ 1.058072514718314
+ 1.051935952778291
+ 1.047338735383179
+ 1.0459655545742368
+ 1.060001046633101
+ 1.055599388147414
 ````
 
 Result also stores the objective value.
@@ -91,7 +105,7 @@ result.objective
 ````
 
 ````
-97210.50257420744
+97210.50257419299
 ````
 
 ExaModelsPower supports solving the OPF in either polar or rectangular coordinates.
@@ -99,14 +113,14 @@ ExaModelsPower supports solving the OPF in either polar or rectangular coordinat
 ````julia
 model, vars, cons = ac_opf_model(
     "pglib_opf_case118_ieee.m";
-    form = :rect
+    form = Rect()
 )
 result = madnlp(model; tol=1e-6)
 result.objective
 ````
 
 ````
-97213.56501338647
+97213.60754650853
 ````
 
 In this case, the objective value and performance speed is comparable. However, for some cases, MadNLP can only solve the problem on one of the two available coordinate systems.

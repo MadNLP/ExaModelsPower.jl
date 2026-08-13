@@ -15,7 +15,7 @@ using ExaModels
 model, vars, cons = ac_opf_model(
     "pglib_opf_case118_ieee.m";
     backend = CUDABackend(),
-    form = :polar,
+    form = Polar(),
     T = Float64
 );
 model
@@ -32,7 +32,7 @@ result.objective
 # ExaModelsPower supports solving the OPF in either polar or rectangular coordinates.
 model, vars, cons = ac_opf_model(
     "pglib_opf_case118_ieee.m";
-    form = :rect
+    form = Rect()
 )
 result = madnlp(model; tol=1e-6)
 result.objective

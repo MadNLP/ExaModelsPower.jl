@@ -175,17 +175,40 @@ end
 # `Nonsensical dimensions`. `data` is either an `ArgSource` placeholder (a
 # recipe) or a concrete NamedTuple (an eager core); the body cannot tell.
 
+"""
+    OPFForm
+
+The formulation a model is built in: [`Polar`](@ref), [`Rect`](@ref) or
+[`DC`](@ref). Passed as an instance — `opf_model(file; form = Rect())` — so the
+choice is part of the TYPE the compiler sees; `form = :rect` is accepted for
+compatibility and resolved through [`opf_form`](@ref), at the price of the call
+being type-unstable.
+"""
 abstract type OPFForm end
+
+"Polar-voltage AC: variables `va`, `vm`."
 struct Polar <: OPFForm end
+
+"Rectangular-voltage AC: variables `vr`, `vim`, plus the voltage-magnitude rows."
 struct Rect <: OPFForm end
+
+"The DC linearization: `va` only, flows per branch, no reactive half."
 struct DC <: OPFForm end
 
+"""
+    opf_form(form) -> OPFForm
+
+The identity on an [`OPFForm`](@ref) instance; resolves the compatibility
+Symbols `:polar`, `:rect`, `:dc`. Every entry point funnels its `form` through
+here, so both spellings work everywhere — but only the instance spelling is
+type-stable, since a Symbol's meaning is a run-time fact.
+"""
 opf_form(f::OPFForm) = f
 opf_form(s::Symbol) =
     s === :polar ? Polar() :
     s === :rect ? Rect() :
     s === :dc ? DC() :
-    error("Invalid coordinate symbol - valid options are :polar or :rect")
+    error("Invalid coordinate symbol - valid options are :polar, :rect or :dc")
 
 # ── variables ────────────────────────────────────────────────────────────────
 
@@ -340,7 +363,7 @@ See [`opf_core`](@ref) for the form `ExaModelsC` compiles.
 function opf_recipe(;
     backend = nothing,
     T = Float64,
-    form = :polar,
+    form = Polar(),
     user_callback = dummy_extension,
 )
     core, data = ExaCore(T; backend = backend, nargs = Val(1))
@@ -371,7 +394,7 @@ function opf_core(
     filename;
     backend = nothing,
     T = Float64,
-    form = :polar,
+    form = Polar(),
     user_callback = dummy_extension,
     start = (;),
 )
@@ -409,7 +432,7 @@ function opf_model(
     filename;
     backend = nothing,
     T = Float64,
-    form = :polar,
+    form = Polar(),
     user_callback = dummy_extension,
     start = (;),
     kwargs...,
@@ -484,9 +507,9 @@ add_extras!(core, ::DC, d, V, F) = (core, (;))
 # better than `opf_model(file; form = :dc)` at a call site that only ever wants
 # DC.
 
-dcopf_recipe(; kwargs...) = opf_recipe(; form = :dc, kwargs...)
-dcopf_core(filename; kwargs...) = opf_core(filename; form = :dc, kwargs...)
-dcopf_model(filename; kwargs...) = opf_model(filename; form = :dc, kwargs...)
+dcopf_recipe(; kwargs...) = opf_recipe(; form = DC(), kwargs...)
+dcopf_core(filename; kwargs...) = opf_core(filename; form = DC(), kwargs...)
+dcopf_model(filename; kwargs...) = opf_model(filename; form = DC(), kwargs...)
 
 # ── The old names ───────────────────────────────────────────────────────────
 #
@@ -496,7 +519,7 @@ dcopf_model(filename; kwargs...) = opf_model(filename; form = :dc, kwargs...)
 # `ac_opf_model(f; form = :dc)` is legal and means what it says; `dcopf_model`
 # is the spelling that says it in the name.
 
-ac_opf_recipe(; form = :polar, kwargs...) = opf_recipe(; form = form, kwargs...)
-ac_opf_core(filename; form = :polar, kwargs...) = opf_core(filename; form = form, kwargs...)
-ac_opf_model(filename; form = :polar, kwargs...) = opf_model(filename; form = form, kwargs...)
+ac_opf_recipe(; form = Polar(), kwargs...) = opf_recipe(; form = form, kwargs...)
+ac_opf_core(filename; form = Polar(), kwargs...) = opf_core(filename; form = form, kwargs...)
+ac_opf_model(filename; form = Polar(), kwargs...) = opf_model(filename; form = form, kwargs...)
 ac_opf_args(filename; kwargs...) = opf_args(filename; kwargs...)

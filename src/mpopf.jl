@@ -377,7 +377,7 @@ are BUILD-time facts — the body slices `genarray[:, 2:N]` and storage changes
 how many variable blocks there are — so a compiled library is per-(N, curve,
 storage-shape). Close it with [`mpopf_args`](@ref).
 """
-function mpopf_recipe(; N, Nbus, has_storage = false, form = :polar, backend = nothing,
+function mpopf_recipe(; N, Nbus, has_storage = false, form = Polar(), backend = nothing,
                       T = Float64, user_callback = dummy_extension,
                       storage_complementarity_constraint = false)
     core, data = ExaCore(T; backend = backend, nargs = Val(1))
@@ -391,7 +391,7 @@ end
 The same multi-period model built eagerly — the form `ExaModelsC` compiles as a
 fixed model.
 """
-function mpopf_core(filename, curve; N = length(curve), form = :polar, backend = nothing,
+function mpopf_core(filename, curve; N = length(curve), form = Polar(), backend = nothing,
                     T = Float64, user_callback = dummy_extension,
                     corrective_action_ratio = 0.1,
                     storage_complementarity_constraint = false)
@@ -640,7 +640,7 @@ function mpopf_model(
     N = length(curve),
     corrective_action_ratio = 0.1,
     backend = nothing,
-    form = :polar,
+    form = Polar(),
     T = Float64,
     storage_complementarity_constraint = false,
     user_callback = dummy_extension,
@@ -663,7 +663,7 @@ function mpopf_model(
     N = size(pd, 2),
     corrective_action_ratio = 0.1,
     backend = nothing,
-    form = :polar,
+    form = Polar(),
     T = Float64,
     storage_complementarity_constraint = false,
     user_callback = dummy_extension,
@@ -687,7 +687,7 @@ function mpopf_model(
     N = length(curve),
     corrective_action_ratio = 0.1,
     backend = nothing,
-    form = :polar,
+    form = Polar(),
     T = Float64,
     user_callback = dummy_extension,
     kwargs...,
@@ -709,7 +709,7 @@ function mpopf_model(
     N = size(pd, 2),
     corrective_action_ratio = 0.1,
     backend = nothing,
-    form = :polar,
+    form = Polar(),
     T = Float64,
     storage_complementarity_constraint = false,
     user_callback = dummy_extension,
