@@ -35,7 +35,7 @@ function _emp_models(case::AbstractString; T = Float64, N = length(ExaModelsPowe
 end
 
 """
-    compile_all(ExaModelsPower; path, case, T, N, only, exclude, kwargs...)
+    compile_all(ExaModelsPower; path = "@emp", case, T, N, only, exclude, kwargs...)
 
 Compile this package's models into one shared library.
 
@@ -44,13 +44,16 @@ the compiler needs, not its values, so the resulting library instantiates any
 case at run time from a path. The multi-period models additionally bake `N` and the
 load curve, which is why they are per-`N` in a way the static ones are not.
 
+`path` defaults to the shared depot entry `"@emp"`.
+
 ```julia
-compile_all(ExaModelsPower; path = "@emp", only = [:acp, :dcp])
+compile_all(ExaModelsPower)                        # all six, into "@emp"
+compile_all(ExaModelsPower; only = [:acp, :dcp])
 ```
 """
 function ExaModelsCompiler.compile_all(
     ::Val{ExaModelsPower};
-    path,
+    path = "@emp",
     case::AbstractString = "pglib_opf_case14_ieee.m",
     T::Type = Float64,
     N::Integer = length(ExaModelsPower.MPOPF_DEFAULT_CURVE),
