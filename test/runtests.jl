@@ -1,4 +1,6 @@
 using Test, ExaModelsPower, MadNLP, MadNLPGPU, KernelAbstractions, CUDA, CUDSS, PowerModels, Ipopt, JuMP, ExaModels, NLPModelsJuMP
+using ExaModelsCompiler, CNLPModels
+import NLPModels
 
 include("opf_tests.jl")
 include("recipe_tests.jl")
