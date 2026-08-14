@@ -1,5 +1,9 @@
 using Test, ExaModelsPower, MadNLP, MadNLPGPU, KernelAbstractions, CUDA, CUDSS, PowerModels, Ipopt, JuMP, ExaModels, NLPModelsJuMP
-using ExaModelsCompiler, CNLPModels
+# Import only `CNLPModel`, not all of CNLPModels: it exports `solution` and so
+# does ExaModels, and a name exported by two loaded packages resolves to
+# neither -- which took out 24 tests that call `solution` unqualified.
+using ExaModelsCompiler
+using CNLPModels: CNLPModel
 import NLPModels
 
 include("opf_tests.jl")
