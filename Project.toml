@@ -40,4 +40,8 @@ Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 test = ["Test", "MadNLP", "MadNLPGPU", "KernelAbstractions", "CUDA", "CUDSS", "Ipopt", "JuMP", "NLPModels", "NLPModelsJuMP", "PowerModels"]
 
 [sources]
-ExaModels = {url = "https://github.com/madsuite-org/ExaModels.jl.git", rev = "main"}
+# Pinned to a SHA, not `rev = "main"`. A branch name is not reproducible under
+# julia-actions/cache: the job restores ~/.julia from an earlier run and reuses
+# that clone without re-fetching, so `main` can resolve to whatever that cache
+# happens to hold. Comes out when ExaModels registers a release.
+ExaModels = {url = "https://github.com/madsuite-org/ExaModels.jl.git", rev = "a9fbf9cc"}

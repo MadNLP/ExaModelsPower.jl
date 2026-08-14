@@ -139,10 +139,13 @@ function runtests()
                 @testset "$case, solution handles, $form_str" begin
                     test_solution_handles(filename, form)
                 end
-                if haskey(ENV, "EMP_TEST_AOT")
-                    @testset "$case, compiles ahead of time, $form_str" begin
-                        test_aot(filename, form)
-                    end
+            end
+
+            # Once for the whole suite, not once per case and formulation:
+            # `compile_all` is minutes of juliac.
+            if haskey(ENV, "EMP_TEST_AOT")
+                @testset "compile_all, then the models it returns" begin
+                    test_aot()
                 end
             end
         end
