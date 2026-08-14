@@ -144,6 +144,11 @@ your own package.
 """
 const MPOPF_DEFAULT_CURVE = [1.0, 0.9, 0.8, 0.95, 1.0]
 
+# What a multi-period recipe freezes, and what it does not. `N` is structural:
+# the body slices `genarray[:, 2:N]` and expands bounds with `repeat(v, 1, N)`,
+# neither of which has a symbolic form. The BUS COUNT is not — it is an extent
+# of the data, so it comes from `length(data.bus)` exactly as the static
+# formulations do it, and one recipe serves every network size.
 """
     mpopf_args_default(filename) -> (data,)
 
@@ -356,6 +361,9 @@ end
 # core are the same model built two ways. `has_storage` is a BUILD-time fact,
 # not data: storage adds seven variable blocks, so a recipe compiled for a
 # storage case cannot instantiate one without it.
+# `Nbus` here is a bus COUNT, not necessarily an `Int`: the recipe passes the
+# deferred `length(data.bus)` and the eager path passes a number. Both flow
+# through the index arithmetic below unchanged.
 function build_mpopf_body(core, form, data, N, Nbus, user_callback, ::Type{T} = Float64;
                           storage_complementarity_constraint = false, has_storage = true) where {T}
     core, vars, cons = build_base_mpopf(core, form, data, N)
@@ -370,35 +378,20 @@ function build_mpopf_body(core, form, data, N, Nbus, user_callback, ::Type{T} = 
 end
 
 """
-    mpopf_recipe(; N, form, Nbus, has_storage, backend, T, user_callback)
+    mpopf_recipe(; N, form, has_storage, backend, T, user_callback)
 
-The multi-period recipe. `N`, the bus count and whether the case has storage
+The multi-period recipe. `N`, the load curve and whether the case has storage
 are BUILD-time facts — the body slices `genarray[:, 2:N]` and storage changes
 how many variable blocks there are — so a compiled library is per-(N, curve,
-storage-shape). Close it with [`mpopf_args`](@ref).
+storage-shape). The network size is NOT: the bus axis is the extent of the
+data, so one recipe instantiates any case. Close it with [`mpopf_args`](@ref).
 """
-function mpopf_recipe(; N, Nbus, has_storage = false, form::OPFForm = Polar(), backend = nothing,
+function mpopf_recipe(; N, has_storage = false, form::OPFForm = Polar(), backend = nothing,
                       T = Float64, user_callback = dummy_extension,
                       storage_complementarity_constraint = false)
     core, data = ExaCore(T; backend = backend, nargs = Val(1))
-    return build_mpopf_body(core, form, data, N, Nbus, user_callback, T;
-        storage_complementarity_constraint, has_storage)
-end
-
-"""
-    mpopf_core(filename, curve; N, form, ...)
-
-The same multi-period model built eagerly — the form `ExaModelsC` compiles as a
-fixed model.
-"""
-function mpopf_core(filename, curve; N = length(curve), form::OPFForm = Polar(), backend = nothing,
-                    T = Float64, user_callback = dummy_extension,
-                    corrective_action_ratio = 0.1,
-                    storage_complementarity_constraint = false)
-    data, = mpopf_args(filename, curve; N, T, backend, corrective_action_ratio)
-    core = ExaCore(T; backend = backend)
     return build_mpopf_body(core, form, data, N, length(data.bus), user_callback, T;
-        storage_complementarity_constraint, has_storage = length(data.storarray) > 0)
+        storage_complementarity_constraint, has_storage)
 end
 
 function build_mpopf(data, Nbus, N, form, user_callback; backend = nothing, T = Float64, storage_complementarity_constraint = false, kwargs...)

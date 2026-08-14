@@ -9,7 +9,10 @@ function test_recipe_equivalence(filename, form; T = Float64)
     # recipe ∘ args — which is what `ac_opf_model` is
     m1, vars, _ = ac_opf_model(filename; form = form, T = T)
     # the same body built eagerly, data in hand — what `ExaModelsC` compiles
-    core, _, _ = ac_opf_core(filename; form = form, T = T)
+    # The eager model, built directly: same body, data already in the core.
+    data, = ExaModelsPower.opf_args(filename; T = T)
+    core, _, _ = ExaModelsPower.build_opf(ExaCore(T), form, data,
+                                          ExaModelsPower.dummy_extension, T)
     m2 = ExaModel(core)
 
     @test m1.meta.nvar == m2.meta.nvar

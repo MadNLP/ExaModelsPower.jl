@@ -338,7 +338,6 @@ model = ExaModel(core, opf_args("pglib_opf_case118_ieee.m")...)
 ```
 
 The same recipe instantiates at any case; it is not consumed by the first use.
-See [`opf_core`](@ref) for the form `ExaModelsC` compiles.
 
 # Arguments
 - `backend`: the array backend to build against. Default `nothing` (CPU).
@@ -353,39 +352,6 @@ function opf_recipe(;
     user_callback = dummy_extension,
 )
     core, data = ExaCore(T; backend = backend, nargs = Val(1))
-    return build_opf(core, form, data, user_callback, T)
-end
-
-"""
-    ac_opf_core(filename; backend, T, form, user_callback, start)
-        -> (core, variables, constraints)
-
-Return an AC OPF core with the case's data already in it — the same model as
-[`opf_recipe`](@ref) closed by [`opf_args`](@ref), but built eagerly, so
-the core declares no placeholders (`nargs = Val(0)`).
-
-This is the form `ExaModelsC.compile_library` compiles: one library per case,
-with no instantiation data crossing the C boundary.
-
-```julia
-core, _, _ = ac_opf_core("pglib_opf_case118_ieee.m")
-compile_library("@acopf118", core)      # note: no example argument
-```
-
-Passing an example argument there would select the recipe path instead and be
-refused for carrying tables rather than a single integer — a different failure
-that reads like this one.
-"""
-function opf_core(
-    filename;
-    backend = nothing,
-    T = Float64,
-    form::OPFForm = Polar(),
-    user_callback = dummy_extension,
-    start = (;),
-)
-    data, = opf_args(filename; T = T, backend = backend, start = start)
-    core = ExaCore(T; backend = backend)
     return build_opf(core, form, data, user_callback, T)
 end
 
@@ -494,18 +460,16 @@ add_extras!(core, ::DC, d, V, F) = (core, (;))
 # DC.
 
 dcopf_recipe(; kwargs...) = opf_recipe(; form = DC(), kwargs...)
-dcopf_core(filename; kwargs...) = opf_core(filename; form = DC(), kwargs...)
 dcopf_model(filename; kwargs...) = opf_model(filename; form = DC(), kwargs...)
 
 # ── The old names ───────────────────────────────────────────────────────────
 #
 # `ac_opf_*` and `dcopf_*` are one family now — the body is the same and the
 # formulation is an argument — so these are the shared entry points under the
-# names callers already use. `:dc` is a formulation like any other, so
-# `ac_opf_model(f; form = :dc)` is legal and means what it says; `dcopf_model`
+# names callers already use. `DC()` is a formulation like any other, so
+# `ac_opf_model(f; form = DC())` is legal and means what it says; `dcopf_model`
 # is the spelling that says it in the name.
 
 ac_opf_recipe(; form = Polar(), kwargs...) = opf_recipe(; form = form, kwargs...)
-ac_opf_core(filename; form = Polar(), kwargs...) = opf_core(filename; form = form, kwargs...)
 ac_opf_model(filename; form = Polar(), kwargs...) = opf_model(filename; form = form, kwargs...)
 ac_opf_args(filename; kwargs...) = opf_args(filename; kwargs...)

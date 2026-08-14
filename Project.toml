@@ -8,6 +8,12 @@ ExaModels = "1037b233-b668-4ce9-9b63-f9f681f55dd2"
 ExaPowerIO = "14903efe-9500-4d7f-a589-7ab7e15da6de"
 JSON = "682c06a0-de6a-54ab-a142-c8b1cf79cde6"
 
+[weakdeps]
+ExaModelsCompiler = "3d1e9a26-5b74-4f0c-9a2b-7c8f4e11d3a7"
+
+[extensions]
+ExaModelsPowerExaModelsCompilerExt = "ExaModelsCompiler"
+
 [compat]
 CUDA = "6"
 ExaModels = "0.11"
@@ -34,4 +40,4 @@ Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 test = ["Test", "MadNLP", "MadNLPGPU", "KernelAbstractions", "CUDA", "CUDSS", "Ipopt", "JuMP", "NLPModels", "NLPModelsJuMP", "PowerModels"]
 
 [sources]
-ExaModels = {url = "https://github.com/madsuite-org/ExaModels.jl.git", rev = "6e504938a021599eaefd1e48a3b8818c151cfb3b"}
+ExaModels = {url = "https://github.com/madsuite-org/ExaModels.jl.git", rev = "main"}

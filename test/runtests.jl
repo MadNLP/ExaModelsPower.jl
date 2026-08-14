@@ -127,8 +127,8 @@ function runtests()
         mp_stor  = mp_stor_test_cases[1:1]
 
         # The recipe split: `ac_opf_model` is `ac_opf_recipe` instantiated at
-        # `ac_opf_args`, and `ac_opf_core` is the same body built eagerly for
-        # ExaModelsC to compile. All three must agree, in BOTH formulations —
+        # `ac_opf_args`. It must agree with the same body built eagerly, in
+        # BOTH formulations —
         # that is the whole guarantee the split is for, and it is backend-free,
         # so it runs once rather than per backend.
         if SELECTION in ("all", "nothing")
