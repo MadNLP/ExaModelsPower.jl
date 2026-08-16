@@ -19,3 +19,10 @@ Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 CNLPModels = {rev = "master", url = "https://github.com/madsuite-org/CNLPModels.jl"}
 ExaModels = {rev = "a9fbf9ccb5afcfb973bc09ed10d7e6b5f24e07a3", url = "https://github.com/madsuite-org/ExaModels.jl"}
 ExaModelsCompiler = {rev = "a9fbf9ccb5afcfb973bc09ed10d7e6b5f24e07a3", subdir = "ExaModelsCompiler", url = "https://github.com/madsuite-org/ExaModels.jl"}
+# The two-stage SCOPF solves through MadNLP's `SchurComplementCondensedKKTSystem`
+# with design-only constraints, which is not in a tagged MadNLP yet. Pinned to
+# the SHA rather than to `schur-design-constraints` for the reason the ExaModels
+# pin above gives: julia-actions/cache restores an earlier clone and a branch
+# name resolves to whatever that cache holds. Comes out when MadNLP tags it.
+MadNLP = {rev = "6dd1a6994453d580de69c589117c7327a96300ad", url = "https://github.com/MadNLP/MadNLP.jl"}
+MadNLPGPU = {rev = "6dd1a6994453d580de69c589117c7327a96300ad", subdir = "lib/MadNLPGPU", url = "https://github.com/MadNLP/MadNLP.jl"}

@@ -143,8 +143,22 @@ function runtests()
                 @testset "$case, recipe == eager, $form_str" begin
                     test_recipe_equivalence(filename, form)
                 end
+                @testset "$case, SCOPF recipe == eager, $form_str" begin
+                    test_scopf_recipe_equivalence(filename, form)
+                end
                 @testset "$case, solution handles, $form_str" begin
                     test_solution_handles(filename, form)
+                end
+            end
+
+            # DC is not in `static_forms` -- those entries carry a PowerModels
+            # type and a voltage test, and DC has neither -- so the DC SCOPF's
+            # recipe/eager equivalence is checked here instead. Its line outage
+            # is a different mask from the AC one (`bs`, not `c1..c8`), so it
+            # gets the same guarantee rather than inheriting the AC result.
+            for (filename, case, _) in test_cases
+                @testset "$case, SCOPF recipe == eager, dc" begin
+                    test_scopf_recipe_equivalence(filename, DC())
                 end
             end
 
@@ -274,8 +288,11 @@ function runtests()
             end
         end
 
-        # N-1 SCOPF: CPU :single vs CPU/GPU :twostage agreement on case9.
-        scopf_tests()
+        # N-1 SCOPF: CPU :single vs CPU/GPU :twostage agreement on case9, plus
+        # the DC formulation. Sliced like everything else above — unguarded, the
+        # CPU comparison ran in all four CI jobs instead of one.
+        scopf_tests(; cpu = SELECTION in ("all", "nothing"),
+                      gpu = SELECTION in ("all", "cuda") && CUDA.has_cuda_gpu())
     end
 end
 

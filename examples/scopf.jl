@@ -1,6 +1,6 @@
 # Standalone N-1 SCOPF example.
 #
-# Solves a security-constrained AC OPF over the single-line (N-1) contingencies
+# Solves a security-constrained OPF over the single-line (N-1) contingencies
 # listed in data/<case>.Ctgs, with bounded corrective generator redispatch. Two
 # formulations of the same problem are available via `mode`:
 #
@@ -15,10 +15,13 @@
 # Run from the examples env (options have defaults; pass --help to list them):
 #   julia --project=./examples examples/scopf.jl
 #   julia --project=./examples examples/scopf.jl --case case9 --mode twostage --form rect
+#   julia --project=./examples examples/scopf.jl --case case9 --mode single --form dc
 #   julia --project=./examples examples/scopf.jl --gpu --inertia free
 #
+# `--form dc` is :single only — scopf_twostage_model is AC-only.
+#
 # GPU two-stage (Schur) converges reliably to the true optimum on case9 at the default
-# tol=1e-4 (deterministic Schur assembly; see SCOPF-GPU-TWOSTAGE-FINDINGS.md):
+# tol=1e-4, the Schur assembly being deterministic:
 #   julia --project=./examples examples/scopf.jl --case case9 --mode twostage --gpu --inertia based
 
 using ExaModelsPower
@@ -46,10 +49,10 @@ function parse_options(args)
             default = :compare
             range_tester = m -> m in (:single, :twostage, :compare)
         "--form"
-            help = "voltage coordinates: :polar or :rect"
+            help = "formulation: polar, rect (voltage coordinates) or dc; dc needs --mode single"
             arg_type = Symbol
             default = :polar
-            range_tester = f -> f in (:polar, :rect)
+            range_tester = f -> f in (:polar, :rect, :dc)
         "--gpu"
             help = "solve on the GPU (CUDABackend); default is CPU"
             action = :store_true
@@ -69,7 +72,7 @@ function parse_options(args)
             dest_name = "cudss_ir"
             default = 0
         "--matching"
-            help = "cuDSS matching (pivot-maximizing permutation) on the GPU solvers. The factorization/solve are correct, but cuDSS 0.8 reports inertia (0,0) whenever matching is on (scratch/matching_inertia_repro.jl), so --inertia based/auto spiral into RESTORATION_FAILED; use --inertia free, or wait for MadNLPGPU's diag-based inertia fallback (scratch/matching_inertia_fix.jl). Off by default until that lands."
+            help = "cuDSS matching (pivot-maximizing permutation) on the GPU solvers. The factorization/solve are correct, but cuDSS 0.8 reports inertia (0,0) whenever matching is on, so --inertia based/auto spiral into RESTORATION_FAILED; use --inertia free, or wait for a diag-based inertia fallback in MadNLPGPU. Off by default until that lands."
             arg_type = Bool
             default = false
         "--tol"
@@ -91,8 +94,8 @@ end
 # Build the two-stage Schur `kkt_options` from the model's two-stage tags. On GPU,
 # configure cuDSS iterative refinement on both solvers, and (if requested) matching on
 # the first-stage Schur-complement solver ONLY — cuDSS matching is NOT SUPPORTED in
-# uniform-batch mode (analysis fails with CUDSS_STATUS_NOT_SUPPORTED; see
-# scratch/matching_ubatch_repro.jl), and the per-scenario blocks are one ubatch solver.
+# uniform-batch mode (analysis fails with CUDSS_STATUS_NOT_SUPPORTED), and the
+# per-scenario blocks are one ubatch solver.
 # On the complement solver matching factorizes/solves correctly but cuDSS 0.8 reports
 # inertia (0,0) with matching on (see --matching help), so inertia-based IPM modes fail
 # until MadNLPGPU recovers the inertia from the factor diagonal. An explicit
@@ -123,10 +126,18 @@ const INERTIA = Dict(
     :free  => MadNLP.InertiaFree,
 )
 
+# The command line spells a formulation as a word; the models dispatch on a type.
+const FORM = Dict(:polar => Polar(), :rect => Rect(), :dc => DC())
+
 opts     = parse_options(ARGS)
 casename = opts[:case]
 mode     = opts[:mode]
-form     = opts[:form]
+form     = FORM[opts[:form]]
+
+# `scopf_twostage_model` is AC-only, so :twostage and :compare have nothing to run
+# under DC. Refuse up front rather than fail inside the second solve.
+opts[:form] === :dc && mode !== :single &&
+    error("--form dc supports --mode single only (scopf_twostage_model is AC-only), got --mode $(mode)")
 backend  = opts[:gpu] ? CUDABackend() : nothing
 inertia  = INERTIA[opts[:inertia]]   # MadNLP inertia_correction_method type
 max_iter = opts[:max_iter]
