@@ -16,7 +16,13 @@ ExaModelsPowerExaModelsCompilerExt = "ExaModelsCompiler"
 
 [compat]
 ExaModels = "0.11"
-ExaPowerIO = "0.3"
+# 0.3.1 rather than 0.3: v0.3.0 builds `bus_map` from an untyped `[]` narrowed
+# by its `Vector{Int}` annotation, and the resulting
+# `convert(Vector{Int64}, ::Vector{Any})` copies through a dynamic `setindex!`
+# that `juliac --trim=safe` will not resolve. Resolving to it makes
+# `compile_all` fail on four verifier errors that all bottom out in that one
+# conversion, so the floor is a build requirement, not a preference.
+ExaPowerIO = "0.3.1"
 JSON = "0.21"
 julia = "1.11"
 
@@ -26,12 +32,3 @@ julia = "1.11"
 # that clone without re-fetching, so `main` can resolve to whatever that cache
 # happens to hold. Comes out when ExaModels registers a release.
 ExaModels = {url = "https://github.com/madsuite-org/ExaModels.jl.git", rev = "a9fbf9ccb5afcfb973bc09ed10d7e6b5f24e07a3"}
-# Registered ExaPowerIO stops at v0.3.0, which predates the one change that
-# makes this package compilable ahead of time: `bus_map` was built from an
-# untyped `[]` and converted by its `Vector{Int}` annotation, and
-# `convert(Vector{Int64}, ::Vector{Any})` copies through a dynamic `setindex!`
-# that `juliac --trim=safe` will not resolve. Without it `compile_all` fails
-# outright on four verifier errors that all bottom out in that one conversion;
-# with it the verifier is clean. Pinned for the same reason and in the same
-# form as ExaModels above; comes out when ExaPowerIO tags a release carrying it.
-ExaPowerIO = {url = "https://github.com/madsuite-org/ExaPowerIO.jl.git", rev = "cdd20bafd9dc8097c00ea7381e808dd07efd0e1e"}
