@@ -15,7 +15,7 @@ include("scopf_tests.jl")
 # 30814411004).  EMP_TEST_SELECTION names the slice; it defaults to everything, so a plain
 # local `Pkg.test()` still runs the whole suite.
 const SELECTION = get(ENV, "EMP_TEST_SELECTION", "all")
-const VALID_SELECTIONS = ("all", "nothing", "cpu", "cuda", "goc3")
+const VALID_SELECTIONS = ("all", "nothing", "cpu", "cuda", "goc3", "aot")
 SELECTION in VALID_SELECTIONS ||
     error("EMP_TEST_SELECTION must be one of $(join(VALID_SELECTIONS, ", ")), got $(repr(SELECTION))")
 
@@ -30,8 +30,13 @@ SELECTION in ("all", "nothing") && push!(CONFIGS, nothing)
 SELECTION in ("all", "cpu") && push!(CONFIGS, CPU())
 SELECTION in ("all", "cuda") && CUDA.has_cuda_gpu() && push!(CONFIGS, CUDABackend())
 const RUN_GOC3 = SELECTION in ("all", "goc3")
+# Its own slice, like GOC3, rather than an opt-in env var: `compile_all` is red
+# at main and nothing says so, because the gate it sat behind is set by no CI
+# job. A slice shows up in the job list; an env var can be forgotten.
+const RUN_AOT = SELECTION in ("all", "aot")
 
-isempty(CONFIGS) && !RUN_GOC3 && error("EMP_TEST_SELECTION=$(SELECTION) selected no tests")
+isempty(CONFIGS) && !RUN_GOC3 && !RUN_AOT &&
+    error("EMP_TEST_SELECTION=$(SELECTION) selected no tests")
 
 test_cases = [("../data/pglib_opf_case3_lmbd.m", "case3", test_case3),
               ("../data/pglib_opf_case5_pjm.m", "case5", test_case5),
@@ -162,12 +167,14 @@ function runtests()
                 end
             end
 
-            # Once for the whole suite, not once per case and formulation:
-            # `compile_all` is minutes of juliac.
-            if haskey(ENV, "EMP_TEST_AOT")
-                @testset "compile_all, then the models it returns" begin
-                    test_aot()
-                end
+        end
+
+        # Once for the whole suite, not once per case and formulation:
+        # `compile_all` is minutes of juliac. Backend-free, so it is its own
+        # slice rather than part of the `nothing` one.
+        if RUN_AOT
+            @testset "compile_all, then the models it returns" begin
+                test_aot()
             end
         end
 

@@ -97,15 +97,16 @@ function test_solution_handles(filename, form)
     @test total == m.meta.nvar
 end
 
-# Compiling costs ~90 s per form and needs ExaModelsC, which is not a test
-# dependency, so it is opt-in: EMP_TEST_AOT=1.
-# Compiling is minutes, so this is opt-in and runs ONCE for the whole suite
-# rather than once per case and formulation: the plain default call a user
-# makes, then a few properties of what comes back. `obj`/`cons` are checked
-# away from x0, so a library that returned constants -- or that ignored the
-# case it was handed -- would fail rather than agree trivially.
+# Compiling is minutes of juliac, so this runs ONCE for the whole suite rather
+# than once per case and formulation: one call, then a few properties of what
+# comes back. `obj`/`cons` are checked away from x0, so a library that returned
+# constants -- or that ignored the case it was handed -- would fail rather than
+# agree trivially.
 function test_aot()
-    r = compile_all(ExaModelsPower)
+    # A directory of our own rather than the `@emp` default. A `@name` path
+    # resolves against CNLPMODELS_PATH, which nothing in this repo sets, so the
+    # default would fail this test on the environment rather than on the models.
+    r = compile_all(ExaModelsPower; path = mkpath(joinpath(mktempdir(), "emp")))
     @test isfile(r.libpath)
     @test Set(Symbol.(r.prefixes)) ==
           Set((:acp, :acr, :dcp, :mpacp, :mpacr, :mpdcp, :scacp, :scacr, :scdcp))
