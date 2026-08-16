@@ -5,6 +5,7 @@ using Test, ExaModelsPower, MadNLP, MadNLPGPU, KernelAbstractions, CUDA, CUDSS, 
 using ExaModelsCompiler
 using CNLPModels: CNLPModel
 import NLPModels
+import LinearAlgebra
 
 include("opf_tests.jl")
 include("recipe_tests.jl")

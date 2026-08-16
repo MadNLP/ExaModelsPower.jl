@@ -85,23 +85,61 @@ end
 # build, still converge, and still report a plausible cost — so the flow itself
 # is what is asserted.
 #
-# Armed on both sides: the outaged line must carry real flow in the BASE case
-# (or an all-zero solution would pass), and some other line must carry real flow
-# in the SAME scenario (or a dead scenario would pass).
+# Asserted on the FORMULATION rather than on a solution. The DC model is linear, so
+# "the outaged line carries no flow" is a property of the constraint matrix: it holds
+# exactly when `pf[l, c]` is pinned to a constant by the equalities alone and that
+# constant is zero. Checking it there is what this package is responsible for, it is
+# exact rather than tolerance-bound, and it holds at every feasible point rather than
+# at one — whether a particular SCOPF instance is solvable is a separate question
+# from whether it is formulated correctly.
+#
+# Armed on both sides: nothing may pin the same line in the BASE case (a formulation
+# that pinned every flow would otherwise pass), and nothing may pin a different line
+# in the SAME scenario (a dead scenario would otherwise pass). The arming doubles as
+# a check on the index arithmetic, which is the one place this reaches into ExaModels'
+# variable layout: a mis-aimed index would have to land on a variable pinned to
+# exactly zero in precisely the outaged (line, scenario) pairs and unpinned in both
+# controls.
+
+# The equality block of a linear model, as `A * x == b`.
+function linear_equality_block(model)
+    n, m = model.meta.nvar, model.meta.ncon
+    A = Matrix(NLPModels.jac(model, zeros(n)))
+    c0 = NLPModels.cons(model, zeros(n))
+    x = collect(range(0.1, 1.3; length = n))          # everything below reads the
+    @test maximum(abs, NLPModels.cons(model, x) .- (A * x .+ c0)) < 1.0e-10   # model off `A`
+    eq = findall(i -> model.meta.lcon[i] == model.meta.ucon[i], 1:m)
+    return A[eq, :], model.meta.ucon[eq] .- c0[eq]
+end
+
+# Do the equalities alone pin `x[j]` to a constant? Returns how far the unit vector
+# `e_j` sits from the row space of `A` — zero exactly when pinned — and the constant
+# it is pinned to.
+function pinned_value(A, b, n, j)
+    e = zeros(n)
+    e[j] = 1.0
+    y = A' \ e
+    return maximum(abs, A' * y .- e), LinearAlgebra.dot(y, b)
+end
+
 function test_scopf_dc(case, contingencies)
     model, vars, _ = scopf_model(case, contingencies; form = DC())
-    result = madnlp(model; tol = 1.0e-8, print_level = MadNLP.ERROR)
-    @test converged(result)
+    nbranch, nscen = vars.pf.size
+    @test nscen == length(contingencies) + 1
 
-    pf = Array(solution(result, vars.pf))        # nbranch x (K+1)
-    @test size(pf, 2) == length(contingencies) + 1
+    A, b = linear_equality_block(model)
+    @test LinearAlgebra.rank(A) == size(A, 1)   # so the least squares in `pinned_value` is meaningful
+    n = model.meta.nvar
+    pf(l, c) = vars.pf.offset + (c - 1) * nbranch + l
 
     for (k, ct) in enumerate(contingencies)
         l = ct.idx
         c = k + 1                                 # scenario 1 is the base case
-        @test isapprox(pf[l, c], 0.0, atol = 1.0e-8)                 # the outage happened
-        @test abs(pf[l, 1]) > 1.0e-4                                 # on a line that was carrying
-        @test maximum(abs, pf[setdiff(1:size(pf, 1), (l,)), c]) > 1.0e-4  # in a live scenario
+        resid, value = pinned_value(A, b, n, pf(l, c))
+        @test resid < 1.0e-10                                            # the outage happened
+        @test abs(value) < 1.0e-10                                       # and it zeroed the flow
+        @test first(pinned_value(A, b, n, pf(l, 1))) > 1.0e-3            # not so in the base case
+        @test first(pinned_value(A, b, n, pf(l == 1 ? 2 : 1, c))) > 1.0e-3   # nor for a live line
     end
 end
 
