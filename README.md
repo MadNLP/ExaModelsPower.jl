@@ -7,10 +7,26 @@ ExaModelsPower.jl is an optimal power flow models using ExaModels.jl
 [![doc](https://img.shields.io/badge/docs-dev-blue.svg)](https://madsuite.org/ExaModelsPower.jl/dev/) 
 [![codecov](https://codecov.io/gh/MadNLP/ExaModelsPower.jl/graph/badge.svg?token=ybOObxcXhB)](https://codecov.io/gh/MadNLP/ExaModelsPower.jl)
 
+## Case files
+
+Every model constructor takes a path. Case files are read through
+[PowerIO](https://github.com/eigenergy/PowerIO.jl), so MATPOWER (`.m`), PSS/E raw
+(`.raw`), PowerWorld aux (`.aux`), PowerModels JSON, PSLF (`.epc`), pandapower JSON,
+egret and GOC3 JSON all work. The format is inferred from the extension; pass `from` when
+it cannot be, as for a `.json` file:
+
+```julia
+model, vars, cons = ac_opf_model("case118.json"; from = "powermodels")
+```
+
+A bare name that is not a file in the working directory is looked up in the bundled
+PGLib-OPF library, which is what `"pglib_opf_case118_ieee.m"` below resolves through.
+Paths with a directory component are passed to PowerIO unchanged.
+
 ## Usage
 ### Static optimal power flow
 ```julia
-using ExaModelsPower, MadNLP, MadNLPGPU, CUDA, ExaModels, GOC3Benchmark, JSON
+using ExaModelsPower, MadNLP, MadNLPGPU, CUDA, ExaModels, JSON
 
 
 model, vars, cons = ac_opf_model(
@@ -60,6 +76,12 @@ result = madnlp(model; tol=1e-4)
 ```
 
 ### Multi-period optimal power flow
+
+The `.Pd` / `.Qd` files hold **MW**, one row per bus in the case's own bus order and one
+column per period; they are converted to per unit on the case's base MVA. To pass the same
+matrices in memory rather than on disk, give both `pd` and `qd` as keywords — one without
+the other is an error rather than a silent half-applied load.
+
 ```julia
 model, vars, cons = mpopf_model(
     "pglib_opf_case118_ieee.m", # static network data

@@ -78,12 +78,22 @@ _default_start(::Type{T}) where {T} =
 _resolve_start(f, data) = f(data)
 _resolve_start(v::Union{Number,AbstractVector,Base.Generator}, data) = v
 
+# A zero line rating means "no limit" in every format read here. Read literally
+# it bounds the flow at zero and asks for `p^2 + q^2 <= 0`. The rating stays in
+# the thermal expression and the slack goes into its upper bound, so an
+# unlimited branch keeps a finite residual.
+unlimited_rate(r, ::Type{T}) where {T} = iszero(r) ? T(Inf) : T(r)
+thermal_ucon(r, ::Type{T}) where {T} = iszero(r) ? T(Inf) : zero(T)
+
 """
     opf_args(filename; T = Float64, backend = nothing, start = (;))
         -> (data,)
 
 Return the argument tuple that closes [`opf_recipe`](@ref) — the parsed case
 together with everything the recipe cannot compute from a placeholder.
+
+`from` names the case format when the file extension cannot say it, as for a `.json` file
+that could be PowerModels, pandapower or GOC3.
 
 `start` overrides any of the starting points `va`, `vm`, `vr`, `vim`, `pg`,
 `qg`, `p`, `q`. Each entry may be a scalar, a vector, a `Base.Generator`, or a
@@ -97,14 +107,14 @@ args = opf_args("pglib_opf_case118_ieee.m"; start = (vm = d -> d.vm0, va = d -> 
 model = ExaModel(ac_opf_recipe()[1], args...)
 ```
 """
-opf_args(filename; T = Float64, backend = nothing, start = (;)) =
-    opf_args(filename, T, backend, start)
+opf_args(filename; T = Float64, backend = nothing, start = (;), from = nothing) =
+    opf_args(filename, T, backend, start, from)
 
 # The positional method is the one a compiled library calls: `::Type{T}` makes
 # `T` a static parameter, where the keyword form leaves it a `Type`-typed value
 # that nothing downstream can specialize on.
-function opf_args(filename, ::Type{T}, backend = nothing, start = (;)) where {T}
-    p = parse_ac_power_data(filename, T)
+function opf_args(filename, ::Type{T}, backend = nothing, start = (;), from = nothing) where {T}
+    p = parse_ac_power_data(filename, T; from = from)
     s = merge(_default_start(T), NamedTuple(start))
     bus, gen, arc, branch = p.bus, p.gen, p.arc, p.branch
     nbus, ngen, narc, nbranch = length(bus), length(gen), length(arc), length(branch)
@@ -127,14 +137,15 @@ function opf_args(filename, ::Type{T}, backend = nothing, start = (;)) where {T}
         pmin = p.pmin, pmax = p.pmax,
         qmin = p.qmin, qmax = p.qmax,
         angmin = p.angmin, angmax = p.angmax,
-        rate_a = p.rate_a,
+        rate_a = unlimited_rate.(p.rate_a, T),
         # Per BRANCH, not per arc. `dcopf`'s `pf` is a branch-length block and
         # was bounded by the arc-length `rate_a`; that lands on the right
         # values only because the first `nbranch` arcs happen to be the
         # from-arcs in branch order (measured identical, 0 differences, on
         # case14, case118 and case9241_pegase). Correct by construction rather
         # than by that coincidence.
-        branch_rate_a = [br.rate_a for br in p.branch],
+        branch_rate_a = [unlimited_rate(br.rate_a, T) for br in p.branch],
+        branch_thermal_ucon = [thermal_ucon(br.rate_a, T) for br in p.branch],
         # Broadcasting a placeholder is refused by design, so the rectangular
         # form's squared voltage bounds are computed here, beside the parse.
         vmin2 = p.vmin .^ 2,
@@ -286,17 +297,21 @@ end
 
 function add_extras!(core, ::Polar, d, V, F)
     @add_con(core, c_from_thermal_limit,
-        c_thermal_limit(b, F.p[b.f_idx], F.q[b.f_idx]) for b in d.branch; lcon = d.branch_ninf)
+        c_thermal_limit(b, F.p[b.f_idx], F.q[b.f_idx]) for b in d.branch;
+        lcon = d.branch_ninf, ucon = d.branch_thermal_ucon)
     @add_con(core, c_to_thermal_limit,
-        c_thermal_limit(b, F.p[b.t_idx], F.q[b.t_idx]) for b in d.branch; lcon = d.branch_ninf)
+        c_thermal_limit(b, F.p[b.t_idx], F.q[b.t_idx]) for b in d.branch;
+        lcon = d.branch_ninf, ucon = d.branch_thermal_ucon)
     return core, (; c_from_thermal_limit, c_to_thermal_limit)
 end
 
 function add_extras!(core, ::Rect, d, V, F)
     @add_con(core, c_from_thermal_limit,
-        c_thermal_limit(b, F.p[b.f_idx], F.q[b.f_idx]) for b in d.branch; lcon = d.branch_ninf)
+        c_thermal_limit(b, F.p[b.f_idx], F.q[b.f_idx]) for b in d.branch;
+        lcon = d.branch_ninf, ucon = d.branch_thermal_ucon)
     @add_con(core, c_to_thermal_limit,
-        c_thermal_limit(b, F.p[b.t_idx], F.q[b.t_idx]) for b in d.branch; lcon = d.branch_ninf)
+        c_thermal_limit(b, F.p[b.t_idx], F.q[b.t_idx]) for b in d.branch;
+        lcon = d.branch_ninf, ucon = d.branch_thermal_ucon)
     @add_con(core, c_voltage_magnitude,
         c_voltage_magnitude_rect(V.vr[b.i], V.vim[b.i]) for b in d.bus;
         lcon = d.vmin2, ucon = d.vmax2)
@@ -372,6 +387,8 @@ definition rather than two.
 - `form`: the formulation, an [`OPFForm`](@ref) instance — `Polar()` (default), `Rect()` or `DC()`.
 - `user_callback`: User function that extends the model
 - `start`: Starting-point overrides; see [`opf_args`](@ref).
+- `from`: the case format, when it cannot be inferred from the extension — `"powermodels"`,
+  `"psse"`, `"powerworld"`, `"matpower"`, `"pandapower"`, `"egret"`, `"pslf"`.
 - `kwargs...`: Additional keyword arguments passed to the model builder.
 
 # Returns
@@ -387,11 +404,12 @@ function opf_model(
     form::OPFForm = Polar(),
     user_callback = dummy_extension,
     start = (;),
+    from = nothing,
     kwargs...,
 )
     core, vars, cons =
         opf_recipe(; backend = backend, T = T, form = form, user_callback = user_callback)
-    args = opf_args(filename; T = T, backend = backend, start = start)
+    args = opf_args(filename; T = T, backend = backend, start = start, from = from)
     model = ExaModel(core, args...; prod = true, kwargs...)
     # The handles come out of the RECIPE, so their offsets are ArgNode
     # expressions; `solution(result, v)` cannot index with those. Resolve them

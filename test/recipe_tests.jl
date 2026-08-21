@@ -61,32 +61,34 @@ function test_solution_handles(filename, form)
     @test total == m.meta.nvar
 end
 
-# Compiling costs ~90 s per form and needs ExaModelsC, which is not a test
-# dependency, so it is opt-in: EMP_TEST_AOT=1.
-# Compiling is minutes, so this is opt-in and runs ONCE for the whole suite
-# rather than once per case and formulation: the plain default call a user
-# makes, then a few properties of what comes back. `obj`/`cons` are checked
-# away from x0, so a library that returned constants -- or that ignored the
-# case it was handed -- would fail rather than agree trivially.
+# Compiling takes minutes, so CI gives it one dedicated slice instead of
+# repeating it for every backend. `EMP_TEST_AOT=1` also adds it to a local
+# full run. The test makes the plain default call a user makes, then checks a
+# few properties of what comes back. `obj`/`cons` are checked away from x0, so
+# a library that returned constants -- or ignored its case -- would fail.
 function test_aot()
-    r = compile_all(ExaModelsPower)
-    @test isfile(r.libpath)
-    @test Set(Symbol.(r.prefixes)) == Set((:acp, :acr, :dcp, :mpacp, :mpacr, :mpdcp))
+    mktempdir() do dir
+        # A test must not require a caller-owned CNLPMODELS_PATH. Install the
+        # library in its private directory and remove it with the directory.
+        r = compile_all(ExaModelsPower; path = joinpath(dir, "emp"))
+        @test isfile(r.libpath)
+        @test Set(Symbol.(r.prefixes)) == Set((:acp, :acr, :dcp, :mpacp, :mpacr, :mpdcp))
 
-    case = "pglib_opf_case14_ieee.m"
-    m = CNLPModel(r.libpath, :acp, case)
-    ref, _, _ = ac_opf_model(case)
-    @test (m.meta.nvar, m.meta.ncon) == (ref.meta.nvar, ref.meta.ncon)
-    @test collect(m.meta.x0) == collect(ref.meta.x0)
-    x = [0.9 + 0.02sin(i) for i = 1:m.meta.nvar]
-    @test NLPModels.obj(m, x) == NLPModels.obj(ref, x)
-    @test collect(NLPModels.cons(m, x)) == collect(NLPModels.cons(ref, x))
+        case = "pglib_opf_case14_ieee.m"
+        m = CNLPModel(r.libpath, :acp, case)
+        ref, _, _ = ac_opf_model(case)
+        @test (m.meta.nvar, m.meta.ncon) == (ref.meta.nvar, ref.meta.ncon)
+        @test collect(m.meta.x0) == collect(ref.meta.x0)
+        x = [0.9 + 0.02sin(i) for i = 1:m.meta.nvar]
+        @test NLPModels.obj(m, x) == NLPModels.obj(ref, x)
+        @test collect(NLPModels.cons(m, x)) == collect(NLPModels.cons(ref, x))
 
-    # The property the recipe rewrite exists for: a network size the library
-    # was never compiled against.
-    m3 = CNLPModel(r.libpath, :mpdcp, "pglib_opf_case3_lmbd.m")
-    ref3, _, _ = mpopf_model("pglib_opf_case3_lmbd.m",
-                             ExaModelsPower.MPOPF_DEFAULT_CURVE;
-                             form = ExaModelsPower.DC())
-    @test (m3.meta.nvar, m3.meta.ncon) == (ref3.meta.nvar, ref3.meta.ncon)
+        # The property the recipe rewrite exists for: a network size the
+        # library was never compiled against.
+        m3 = CNLPModel(r.libpath, :mpdcp, "pglib_opf_case3_lmbd.m")
+        ref3, _, _ = mpopf_model("pglib_opf_case3_lmbd.m",
+                                 ExaModelsPower.MPOPF_DEFAULT_CURVE;
+                                 form = ExaModelsPower.DC())
+        @test (m3.meta.nvar, m3.meta.ncon) == (ref3.meta.nvar, ref3.meta.ncon)
+    end
 end

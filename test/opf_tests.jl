@@ -86,6 +86,70 @@ end
 # GOC3 is a smoke test of the parser and the model constructor.  Solving it cost 32 of the
 # 47 min this section took in CI, for one iteration of a 139502-variable problem, so build
 # the model and evaluate its callbacks instead of solving.
+# The model may not depend on uid spellings. Rename every uid so the digits
+# the retired suffix rule would have read run in reverse of document order;
+# the model built from the renamed pair must be the one built from the
+# original. This is the regression for the misindexing that rule caused on
+# files that do not follow the competition uid convention.
+function sc_uid_invariance_tests(filename, backend, T)
+    case_path = filename * ".json"
+    uc_path = filename * "_solution.json"
+    case = JSON.parsefile(case_path)
+    uc = JSON.parsefile(uc_path)
+    uids = String[]
+    for section in values(case["network"])
+        section isa Vector || continue
+        for item in section
+            item isa Dict && haskey(item, "uid") && push!(uids, String(item["uid"]))
+        end
+    end
+    n = length(uids)
+    mapping = Dict(uid => "renamed $(n - i) ($uid)" for (i, uid) in enumerate(uids))
+    rename(x::Dict) = Dict(k => rename(v) for (k, v) in x)
+    rename(x::Vector) = [rename(v) for v in x]
+    rename(x::String) = get(mapping, x, x)
+    rename(x) = x
+    dir = mktempdir()
+    renamed_case = joinpath(dir, "case.json")
+    renamed_uc = joinpath(dir, "case_solution.json")
+    open(renamed_case, "w") do io
+        JSON.print(io, rename(case))
+    end
+    open(renamed_uc, "w") do io
+        JSON.print(io, rename(uc))
+    end
+    m0, _, vars0, lengths0, _ = ExaModelsPower.goc3_model(case_path, uc_path; backend = backend, T = T)
+    m1, _, vars1, lengths1, _ = ExaModelsPower.goc3_model(renamed_case, renamed_uc; backend = backend, T = T)
+    x0 = m0.meta.x0
+    @test m1.meta.nvar == m0.meta.nvar
+    @test NLPModelsJuMP.obj(m1, x0) ≈ NLPModelsJuMP.obj(m0, x0)
+    @test Array(NLPModelsJuMP.cons(m1, x0)) ≈ Array(NLPModelsJuMP.cons(m0, x0))
+
+    # The solution writer maps every row back to a variable index through the
+    # instance's uid tables. Write the same variable vector against both
+    # documents; each written row must carry the values its original carries.
+    x = collect(x0)
+    S = typeof(x)
+    result = ExaModels.SolverCore.GenericExecutionStats{eltype(x),S,S,Any}(solution = x)
+    written = joinpath(dir, "written.json")
+    written_renamed = joinpath(dir, "written_renamed.json")
+    ExaModelsPower.save_go3_solution(case_path, uc_path, written, result, vars0, lengths0)
+    ExaModelsPower.save_go3_solution(renamed_case, renamed_uc, written_renamed, result, vars1, lengths1)
+    w0 = JSON.parsefile(written)["time_series_output"]
+    w1 = JSON.parsefile(written_renamed)["time_series_output"]
+    @test Set(keys(w0)) == Set(keys(w1))
+    for (section, rows) in w0
+        by_uid = Dict(String(r["uid"]) => r for r in w1[section])
+        @test length(by_uid) == length(rows)
+        for row in rows
+            renamed_row = by_uid[rename(String(row["uid"]))]
+            for (field, value) in row
+                @test renamed_row[field] == rename(value)
+            end
+        end
+    end
+end
+
 function sc_tests(filename, backend, T)
     uc_filename = filename*"_solution.json"
     filename = filename*".json"

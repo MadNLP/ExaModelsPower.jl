@@ -1,4 +1,5 @@
 using Test, ExaModelsPower, MadNLP, MadNLPGPU, KernelAbstractions, CUDA, CUDSS, PowerModels, Ipopt, JuMP, ExaModels, NLPModelsJuMP
+import ExaModelsPower.JSON as JSON
 # Import only `CNLPModel`, not all of CNLPModels: it exports `solution` and so
 # does ExaModels, and a name exported by two loaded packages resolves to
 # neither -- which took out 24 tests that call `solution` unqualified.
@@ -8,13 +9,14 @@ import NLPModels
 
 include("opf_tests.jl")
 include("recipe_tests.jl")
+include("powerio_parser_tests.jl")
 
-# CI runs each backend, and the GOC3 smoke test, as a separate job, so the wall clock is
-# the slowest of them rather than their sum (they were 13.0, 14.8, 21.5 and 74.9 min in run
-# 30814411004).  EMP_TEST_SELECTION names the slice; it defaults to everything, so a plain
-# local `Pkg.test()` still runs the whole suite.
+# CI runs each backend, GOC3, and AOT as separate jobs, so the wall clock is the
+# slowest of them rather than their sum. EMP_TEST_SELECTION names the slice; it
+# defaults to the runtime suite, so a plain local `Pkg.test()` runs every model
+# test without compiling the shared library.
 const SELECTION = get(ENV, "EMP_TEST_SELECTION", "all")
-const VALID_SELECTIONS = ("all", "nothing", "cpu", "cuda", "goc3")
+const VALID_SELECTIONS = ("all", "nothing", "cpu", "cuda", "goc3", "aot")
 SELECTION in VALID_SELECTIONS ||
     error("EMP_TEST_SELECTION must be one of $(join(VALID_SELECTIONS, ", ")), got $(repr(SELECTION))")
 
@@ -29,8 +31,15 @@ SELECTION in ("all", "nothing") && push!(CONFIGS, nothing)
 SELECTION in ("all", "cpu") && push!(CONFIGS, CPU())
 SELECTION in ("all", "cuda") && CUDA.has_cuda_gpu() && push!(CONFIGS, CUDABackend())
 const RUN_GOC3 = SELECTION in ("all", "goc3")
+# AOT has its own CI slice because it compiles all six models and does not need
+# a GPU. Keep EMP_TEST_AOT as the local opt-in for a full `Pkg.test()` run.
+const RUN_AOT = SELECTION == "aot" || haskey(ENV, "EMP_TEST_AOT")
+# The parser tests are backend-free, so they belong to exactly one slice rather than
+# repeating in all four.  The serial slice is the cheapest of them.
+const RUN_PARSER = SELECTION in ("all", "nothing")
 
-isempty(CONFIGS) && !RUN_GOC3 && error("EMP_TEST_SELECTION=$(SELECTION) selected no tests")
+isempty(CONFIGS) && !RUN_GOC3 && !RUN_AOT &&
+    error("EMP_TEST_SELECTION=$(SELECTION) selected no tests")
 
 test_cases = [("../data/pglib_opf_case3_lmbd.m", "case3", test_case3),
               ("../data/pglib_opf_case5_pjm.m", "case5", test_case5),
@@ -125,6 +134,7 @@ function runtests()
         # The PowerModels/Ipopt and JuMP/MadNLP reference solutions do not depend on the
         # backend, so compute them once per case/form and reuse them.
         static_ref_cache = Dict{Tuple{String,String},Any}()
+        dcopf_ref_cache = Dict{String,Any}()
 
         # case3 and case5 exercise the same code with different data, so the multi-period
         # sections keep case3 only.  Every backend runs the same set: with one job per
@@ -137,6 +147,14 @@ function runtests()
         # BOTH formulations —
         # that is the whole guarantee the split is for, and it is backend-free,
         # so it runs once rather than per backend.
+        RUN_PARSER && powerio_parser_tests()
+
+        if RUN_AOT
+            @testset "compile_all, then the models it returns" begin
+                test_aot()
+            end
+        end
+
         if SELECTION in ("all", "nothing")
             for (filename, case, _) in test_cases, (form_str, form, _, _) in static_forms
                 @testset "$case, recipe == eager, $form_str" begin
@@ -144,14 +162,6 @@ function runtests()
                 end
                 @testset "$case, solution handles, $form_str" begin
                     test_solution_handles(filename, form)
-                end
-            end
-
-            # Once for the whole suite, not once per case and formulation:
-            # `compile_all` is minutes of juliac.
-            if haskey(ENV, "EMP_TEST_AOT")
-                @testset "compile_all, then the models it returns" begin
-                    test_aot()
                 end
             end
         end
@@ -244,10 +254,27 @@ function runtests()
 
             # DCOPF
             for (filename, case, _) in test_cases
+                m32, _, _ = dcopf_model(filename; T=Float32, backend = backend)
+                m64, v64, _ = dcopf_model(filename; T=Float64, backend = backend)
+
                 @testset "$case, DCOPF, $backend" begin
-                    m32, _, _ = dcopf_model(filename; T=Float32, backend = backend)
-                    m64, _, _ = dcopf_model(filename; T=Float64, backend = backend)
                     test_callbacks(m32, m64, backend)
+                end
+
+                # Evaluating the callbacks says nothing about the answer, so DCOPF gets
+                # the same carve-out as static AC: the smallest case is solved against
+                # the PowerModels reference, and every other case is callbacks only.
+                if solving && case == solve_case
+                    result64 = exasolve(m64, backend; print_level = MadNLP.ERROR)
+
+                    result_pm = get!(dcopf_ref_cache, filename) do
+                        nlp_solver = JuMP.optimizer_with_attributes(Ipopt.Optimizer, "tol"=>Float64(result64.options.tol), "print_level"=>0)
+                        solve_opf(filename, DCPPowerModel, nlp_solver)
+                    end
+
+                    @testset "$case, DCOPF solve, $backend" begin
+                        test_dcopf_case(result64, result_pm, v64.pg, v64.pf)
+                    end
                 end
             end
 
@@ -270,6 +297,9 @@ function runtests()
         if RUN_GOC3
             @testset "GOC3, Float64, nothing" begin
                 sc_tests("../data/C3E4N00073D1_scenario_303", nothing, Float64)
+            end
+            @testset "GOC3 uid invariance" begin
+                sc_uid_invariance_tests("../data/C3E4N00073D1_scenario_303", nothing, Float64)
             end
         end
     end
